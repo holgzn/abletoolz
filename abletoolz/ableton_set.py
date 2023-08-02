@@ -20,6 +20,9 @@ from abletoolz.misc import CB, RB, RST, STEREO_OUTPUTS, B, C, G, M, R, Y, get_el
 if sys.platform == "win32":
     import win32_setctime
 
+if sys.platform == "darwin":
+    import plistlib
+
 logger = logging.getLogger(__name__)
 
 
@@ -452,12 +455,34 @@ class AbletonSet(object):
                     return vst3
             for directory in self.found_vst_dirs:
                 for dll in directory.rglob("*.dll"):
+                    # TODO rather match by MyPlugin.vst3/Contents/Resources/moduleinfo.json	?
+                    # https://steinbergmedia.github.io/vst3_dev_portal/pages/Technical+Documentation/Locations+Format/Plugin+Format.html
                     if plugin_name == dll.name or plugin_name == dll.name.replace(".32", "").replace(".64", ""):
                         return dll
             return None
         else:
-            # TODO: Implement MacOS VST3 logic
-            logger.warning("%sMac OS Vst3 not implemented yet.", RB)
+
+            # TODO match from sqlite db?
+            vst3_plugins = list(pathlib.Path("/Library/Audio/Plug-Ins/VST3").rglob("*.vst3/Contents/Info.plist")) # TODO: ~/Library and custom folder + list(pathlib.Path("/Library/Audio/Plugins/VST3").rglob("*.vst3"))
+            for vst3 in vst3_plugins:
+                #print(vst3)
+                with open(vst3, 'rb') as file:
+                    pl = plistlib.load(file)
+                    if "CFBundleDisplayName" in pl:
+                        if pl["CFBundleDisplayName"]== plugin_name:
+                            return vst3.parent.parent
+                    elif "CFBundleName" in pl:
+                        if pl["CFBundleName"]== plugin_name:
+                            return vst3.parent.parent
+                    if "AudioComponents" in pl:
+                        if pl["AudioComponents"][0]["name"] == plugin_name: #TODO: more than one component?
+                            print("using AudioComponents[0]")
+                            return vst3.parent.parent
+                    elif plugin_name + ".vst3" == vst3.parent.parent.name:
+                        return vst3.parent.parent
+
+            # TODO do something with self.found_vst_dirs?
+
             return None
 
     # Plugin related functions.
@@ -504,8 +529,10 @@ class AbletonSet(object):
     def list_plugins(self, vst_dirs: List[pathlib.Path]) -> List[pathlib.Path]:
         """Iterates through all plugin references and checks paths for VSTs."""
         self.found_vst_dirs.extend(vst_dirs)
+        # TODO consider to log existing plugins as debug and only report missing ones by default as it is with the samples
         for plugin_element in self.root.iter("PluginDesc"):
             self.last_elem = plugin_element
+            #print(ET.tostring(plugin_element))
             for vst_element in plugin_element.iter("VstPluginInfo"):
                 full_path, name, potential = self.parse_vst_element(vst_element)
                 exists = True if full_path and full_path.exists() else False
@@ -533,6 +560,18 @@ class AbletonSet(object):
                 )
                 # TODO figure out how to match different name from components installed to stored set plugin.
                 # au_components = pathlib.Path('/Library/Audio/Plug-Ins/Components').rglob('*.component')
+            for vst3_element in plugin_element.iter("Vst3PluginInfo"):
+                name = vst3_element.find("Name").get("Value")
+                full_path = self.search_plugins(name)
+                #manufacturer = "TODO: read from sqlite?" # get_element(plugin_element, "AuPluginInfo.Manufacturer", attribute="Value")
+                exists = True if full_path and full_path.exists() else False
+                color = G if exists else R
+                #if potential and color == R:
+                #    color = Y
+                logger.info(
+                    "%sPlugin: %s, %sPlugin folder path: %s, %sExists: %s", color, name, M, full_path, color, exists
+                )
+
         return self.found_vst_dirs
 
     def _list_samples(self) -> None:
