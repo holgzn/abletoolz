@@ -194,6 +194,18 @@ def parse_arguments() -> argparse.Namespace:
         "sets but abbreviated component names. Might possibly add support for them later.",
     )
 
+    parser.add_argument(
+        "--trim-drum-rack",
+        metavar="TRACK_ID",
+        help="Remove all unsued chains from the Drum Rack on the given track",
+    )
+
+    parser.add_argument(
+        "--split-drum-rack",
+        metavar="TRACK_ID",
+        help="Split the Drum Rack on the given track into multiple tracks",
+    )
+
     args = parser.parse_args()
     assert not (
         args.fix_samples_absolute and args.fix_samples_collect

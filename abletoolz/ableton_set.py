@@ -238,7 +238,7 @@ class AbletonSet(object):
 
     def get_file_times(self) -> None:
         """Find set creation/modification times."""
-        if sys.platform == "win32":
+        if sys.platform == "win32" or sys.platform == "linux":
             self.creation_time = os.path.getctime(self.path)
         else:
             self.creation_time = os.stat(self.path).st_birthtime
