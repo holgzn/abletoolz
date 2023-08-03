@@ -286,6 +286,10 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         ableton_set.load_tracks()
         ableton_set.trim_drum_racks(args.trim_drum_rack)
 
+    if args.split_drum_rack:
+        ableton_set.load_tracks()
+        ableton_set.split_drum_racks(args.trim_drum_rack)
+
     if args.xml:
         ableton_set.save_xml()
     if args.save:
@@ -308,6 +312,8 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
             args.set_track_heights,
             args.set_track_widths,
             args.unfold,
+            args.trim_drum_rack,
+            args.split_drum_rack
         ]
     ):
         logger.info("%sNo changes saved, use -s/--save option to write changes to file.", Y)

@@ -871,3 +871,51 @@ class AbletonSet(object):
             for key in midi_keys:
                 played_notes.add(int(key.get("Value")))  
         return played_notes
+
+    def split_drum_racks(self, drum_track_ids)-> None:
+        for id in drum_track_ids:
+            self.split_drum_rack(id)
+
+    def split_drum_rack(self, drum_track_id)-> None:
+        track_found = False
+        for track in self.tracks:
+            if track.id == drum_track_id:
+                track_found = True
+                
+                
+                logger.info("%Spliiting drum rack(s) on track %s", C, drum_track_id)
+                drum_groups = track.track_root.findall("DeviceChain//DrumGroupDevice")
+                if len(drum_groups) == 0:
+                    logger.error("%sNo drum rack(s) found on track %s", R ,drum_track_id)
+                    break
+                splitted_something = False
+
+                processed_groups = 0
+                
+                for drum_group in drum_groups:
+                    group_name = drum_group.find("UserName").get("Value") # TODO alternate name    
+                    branch_container = drum_group.find("Branches")
+                    branches = branch_container.findall("DrumBranch")
+                    new_track = None
+                    if len(branches) > 1:
+                        branch = branches[0]
+                        id = branch.get("Id")
+                        new_track = self.duplicate_track(track)
+                        to_remove = new_track.find(f"DeviceChain//DrumBranch[@Id='{id}']")
+                        to_remove_from = new_track.find(f"DeviceChain//DrumBranch[@Id='{id}']../") #Todo use ID Of BRnaches parent?
+                        to_remove_from.remove(to_remove)
+                        for branch in branches[1:]:
+                            branch_container.remove(branch)
+                        # TODO remove all other drum groups except the one that we just stripped down
+
+
+
+
+                        branch_container.remove(branch)
+                        splitted_something = True
+                break #track was found
+                              
+        if not track_found:
+            logger.error("%sTrack %s was not found", R, drum_track_id)
+        elif not splitted_something:
+            logger.info("%sTrack %s had no chains to extract", G, drum_track_id)
