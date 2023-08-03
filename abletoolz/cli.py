@@ -207,6 +207,7 @@ def parse_arguments() -> argparse.Namespace:
     )
 
     args = parser.parse_args()
+    print(args)
     assert not (
         args.fix_samples_absolute and args.fix_samples_collect
     ), "Can only use --fix-samples-collect or --fix-samples-absolute, not both!"
@@ -280,6 +281,10 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         vst_dirs: List[pathlib.Path] = []
         result = ableton_set.list_plugins(vst_dirs)
         vst_dirs = list(set(result))
+
+    if args.trim_drum_rack:
+        ableton_set.load_tracks()
+        ableton_set.trim_drum_rack(args.trim_drum_rack)
 
     if args.xml:
         ableton_set.save_xml()

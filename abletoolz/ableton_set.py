@@ -308,9 +308,12 @@ class AbletonSet(object):
     @above_version(supported_version=(8, 0, 0))
     def load_tracks(self) -> None:
         """Load tracks into AbletonTrack src."""
-        tracks = get_element(self.root, "LiveSet.Tracks")
-        for track in tracks:
-            self.tracks.append(AbletonTrack(track, self.version_tuple))
+        if len(self.tracks) == 0:
+            tracks = get_element(self.root, "LiveSet.Tracks")
+            for track in tracks:
+                self.tracks.append(AbletonTrack(track, self.version_tuple))
+        else:
+            print("Tracks already loaded")
 
     def print_tracks(self) -> None:
         """logger.infos track info."""
@@ -812,3 +815,48 @@ class AbletonSet(object):
             )
             for sub_ind, clip_clr_ele in zip(clip_view_gradient, arangement_clr_elements):
                 clip_clr_ele.set("Value", str(sub_ind))
+
+    def trim_drum_rack(self, drum_track_id)-> None:
+        """Remove all chains from the drum rack on this track that don't have any notes in the clips or the arrangement"""
+        track_found=False
+        for track in self.tracks:
+            if track.id == drum_track_id:
+                track_found = True
+                print("Trimming Drum Rack(s) on Track "+drum_track_id)
+                drum_groups = track.track_root.findall("DeviceChain//DrumGroupDevice")
+                for drum_group in drum_groups:
+                    group_name=drum_group.find("UserName").get("Value")
+                    #print(drum_group)
+                    clips = track.track_root.findall("DeviceChain//MidiClip/Disabled[@Value='false']/..")
+                    #print(clips)
+                    played_keys=set()
+                    for clip in clips:
+                        midi_keys = clip.findall(".//MidiNoteEvent[@IsEnabled='true']../../MidiKey")
+                        for key in midi_keys:
+                            played_keys.add(int(key.get("Value")))
+                    #print(played_keys)
+                    branches_to_remove = []
+                    branches = drum_group.findall("Branches/DrumBranch")
+                    for branch in branches:
+                        receivers= branch.findall("BranchInfo/ReceivingNote")
+                        #TODO receiving note "All"
+                        for receiver in receivers:
+                            note = 128 - int(receiver.get("Value"))
+                            if not note in played_keys:
+                                #print("remove chain for note "+str(note)+" -> "+branch.get("Id"))
+                                branches_to_remove.append(branch.get("Id"))
+                    
+                    branch_container = drum_group.find("Branches")
+                    #print(branch_container)
+                    for id in branches_to_remove:
+                        branch = branch_container.find("DrumBranch[@Id='"+id+"']")
+                        chain_name = branch.find("Name/EffectiveName").get("Value")
+                        print("Removing Chain '"+chain_name+"' from group '"+group_name+"'")
+                        branch_container.remove(branch)
+                        
+                if len(drum_groups) == 0:
+                    print("No Drum Rack(s) found on track "+drum_track_id)
+                    break
+                
+        if not track_found:
+            print("Track "+ drum_track_id+" was not found")
