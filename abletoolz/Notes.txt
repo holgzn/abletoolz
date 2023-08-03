@@ -1,3 +1,7 @@
 Ableton - LiveSet - Tracks - AudioTrack - DeviceChain - DeviceChain - Devices - PluginDevice
     - SourceContext - Value - BranchSourceContext - BranchDeviceId@Value
     - PluginDesc - Vst3PluginInfo - Name
+
+
+Ableton - LiveSet - Tracks - MidiTrack - DeviceChain - Devices - DrumGroupDevice
+    - Branches - DrumBranch
