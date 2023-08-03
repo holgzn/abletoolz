@@ -312,8 +312,6 @@ class AbletonSet(object):
             tracks = get_element(self.root, "LiveSet.Tracks")
             for track in tracks:
                 self.tracks.append(AbletonTrack(track, self.version_tuple))
-        else:
-            print("Tracks already loaded")
 
     def print_tracks(self) -> None:
         """logger.infos track info."""
@@ -859,9 +857,9 @@ class AbletonSet(object):
         for branch in branches:
             receivers = branch.findall("BranchInfo/ReceivingNote")
             for receiver in receivers:
-                #TODO receiving note "All"
+                #note 128 is "All"
                 note = 128 - int(receiver.get("Value"))
-                if not note in played_notes:
+                if note != 128 and not note in played_notes:
                     unsued_branch_ids.append(branch.get("Id"))
         return unsued_branch_ids
 
