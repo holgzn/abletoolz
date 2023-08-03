@@ -169,6 +169,18 @@ def parse_arguments() -> argparse.Namespace:
         "colors, so the results are limited, but you still can get some decent results. This uses the CIE2000 "
         "algorithm which helps create a gradient more natural to the human eye.",
     )
+    parser.add_argument(
+        "--trim-drum-rack",
+        metavar="TRACK_ID",
+        nargs="+",
+        help="Remove all unsued chains from the drum rack on the given track.",
+    )
+    parser.add_argument(
+        "--split-drum-rack",
+        metavar="TRACK_ID",
+        nargs="+",
+        help="Split the drum chains of the drum rack on the given track into multiple new tracks, preserving sends on the track and the drum rack itself. If combined with drum rack trimming, the trimming is done first.",
+    )
 
     # Analysis arguments.
     parser.add_argument(
@@ -192,18 +204,6 @@ def parse_arguments() -> argparse.Namespace:
         "plugin name in a different path it will automatically update these paths the next time "
         "you save your project, so take it with a grain of salt. AU are not stored as paths in "
         "sets but abbreviated component names. Might possibly add support for them later.",
-    )
-
-    parser.add_argument(
-        "--trim-drum-rack",
-        metavar="TRACK_ID",
-        help="Remove all unsued chains from the Drum Rack on the given track",
-    )
-
-    parser.add_argument(
-        "--split-drum-rack",
-        metavar="TRACK_ID",
-        help="Split the Drum Rack on the given track into multiple tracks",
     )
 
     args = parser.parse_args()
@@ -284,7 +284,7 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
 
     if args.trim_drum_rack:
         ableton_set.load_tracks()
-        ableton_set.trim_drum_rack(args.trim_drum_rack)
+        ableton_set.trim_drum_racks(args.trim_drum_rack)
 
     if args.xml:
         ableton_set.save_xml()

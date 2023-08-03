@@ -816,6 +816,10 @@ class AbletonSet(object):
             for sub_ind, clip_clr_ele in zip(clip_view_gradient, arangement_clr_elements):
                 clip_clr_ele.set("Value", str(sub_ind))
 
+    def trim_drum_racks(self, drum_track_ids)-> None:
+        for id in drum_track_ids:
+            self.trim_drum_rack(id)
+
     def trim_drum_rack(self, drum_track_id)-> None:
         """Remove all chains from all drum racks on the given track that don't have any active notes in the session arrangement clips"""
         track_found = False
@@ -830,7 +834,7 @@ class AbletonSet(object):
                 # using ../ is a workaround due to restrictions in the filter predicate which cannot select based on child element attributes
                 clips = track.track_root.findall("DeviceChain//MidiClip/Disabled[@Value='false']/..")
                 played_notes =  self._get_unique_notes(clips)
-                
+                removed_something = False
                 for drum_group in drum_groups:
                     group_name = drum_group.find("UserName").get("Value") # TODO alternate name    
                     branches_to_remove = self._get_unused_drum_branches(drum_group, played_notes)
@@ -840,10 +844,13 @@ class AbletonSet(object):
                         chain_name = branch.find("Name/EffectiveName").get("Value")
                         logger.info("%sRemoving unsused chain %s%s%s %s%s", C, G, group_name, C, R, chain_name)
                         branch_container.remove(branch)
+                        removed_something = True
                 break #track was found
                               
         if not track_found:
             logger.error("%sTrack %s was not found", R, drum_track_id)
+        elif not removed_something:
+            logger.info("%sTrack %s has no unused chains", G, drum_track_id)
     
     def _get_unused_drum_branches(self, drum_group: ET.Element, played_notes: set[int]) -> list[ET.Element]:
         """Find all DrumBranch elements (aka Drum Rack Chains) that are receiving notes other than the ones given."""
