@@ -817,46 +817,52 @@ class AbletonSet(object):
                 clip_clr_ele.set("Value", str(sub_ind))
 
     def trim_drum_rack(self, drum_track_id)-> None:
-        """Remove all chains from the drum rack on this track that don't have any notes in the clips or the arrangement"""
-        track_found=False
+        """Remove all chains from all drum racks on the given track that don't have any active notes in the session arrangement clips"""
+        track_found = False
         for track in self.tracks:
             if track.id == drum_track_id:
                 track_found = True
-                print("Trimming Drum Rack(s) on Track "+drum_track_id)
+                logger.info("%sTrimming drum rack(s) on track %s", C, drum_track_id)
                 drum_groups = track.track_root.findall("DeviceChain//DrumGroupDevice")
-                for drum_group in drum_groups:
-                    group_name=drum_group.find("UserName").get("Value")
-                    #print(drum_group)
-                    clips = track.track_root.findall("DeviceChain//MidiClip/Disabled[@Value='false']/..")
-                    #print(clips)
-                    played_keys=set()
-                    for clip in clips:
-                        midi_keys = clip.findall(".//MidiNoteEvent[@IsEnabled='true']../../MidiKey")
-                        for key in midi_keys:
-                            played_keys.add(int(key.get("Value")))
-                    #print(played_keys)
-                    branches_to_remove = []
-                    branches = drum_group.findall("Branches/DrumBranch")
-                    for branch in branches:
-                        receivers= branch.findall("BranchInfo/ReceivingNote")
-                        #TODO receiving note "All"
-                        for receiver in receivers:
-                            note = 128 - int(receiver.get("Value"))
-                            if not note in played_keys:
-                                #print("remove chain for note "+str(note)+" -> "+branch.get("Id"))
-                                branches_to_remove.append(branch.get("Id"))
-                    
-                    branch_container = drum_group.find("Branches")
-                    #print(branch_container)
-                    for id in branches_to_remove:
-                        branch = branch_container.find("DrumBranch[@Id='"+id+"']")
-                        chain_name = branch.find("Name/EffectiveName").get("Value")
-                        print("Removing Chain '"+chain_name+"' from group '"+group_name+"'")
-                        branch_container.remove(branch)
-                        
                 if len(drum_groups) == 0:
-                    print("No Drum Rack(s) found on track "+drum_track_id)
+                    logger.error("%sNo drum rack(s) found on track %s", R ,drum_track_id)
                     break
+                # using ../ is a workaround due to restrictions in the filter predicate which cannot select based on child element attributes
+                clips = track.track_root.findall("DeviceChain//MidiClip/Disabled[@Value='false']/..")
+                played_notes =  self._get_unique_notes(clips)
                 
+                for drum_group in drum_groups:
+                    group_name = drum_group.find("UserName").get("Value") # TODO alternate name    
+                    branches_to_remove = self._get_unused_drum_branches(drum_group, played_notes)
+                    branch_container = drum_group.find("Branches")
+                    for id in branches_to_remove:
+                        branch = branch_container.find(f"DrumBranch[@Id='{id}']")
+                        chain_name = branch.find("Name/EffectiveName").get("Value")
+                        logger.info("%sRemoving unsused chain %s%s%s %s%s", C, G, group_name, C, R, chain_name)
+                        branch_container.remove(branch)
+                break #track was found
+                              
         if not track_found:
-            print("Track "+ drum_track_id+" was not found")
+            logger.error("%sTrack %s was not found", R, drum_track_id)
+    
+    def _get_unused_drum_branches(self, drum_group: ET.Element, played_notes: set[int]) -> list[ET.Element]:
+        """Find all DrumBranch elements (aka Drum Rack Chains) that are receiving notes other than the ones given."""
+        unsued_branch_ids = []
+        branches = drum_group.findall("Branches/DrumBranch")
+        for branch in branches:
+            receivers = branch.findall("BranchInfo/ReceivingNote")
+            for receiver in receivers:
+                #TODO receiving note "All"
+                note = 128 - int(receiver.get("Value"))
+                if not note in played_notes:
+                    unsued_branch_ids.append(branch.get("Id"))
+        return unsued_branch_ids
+
+    def _get_unique_notes(self, clips: list[ET.Element]) -> set[int]:
+        """Find all MIDI notes that are played by any of the given clips elements"""
+        played_notes = set[int]()
+        for clip in clips:
+            midi_keys = clip.findall(".//MidiNoteEvent[@IsEnabled='true']../../MidiKey")
+            for key in midi_keys:
+                played_notes.add(int(key.get("Value")))  
+        return played_notes

@@ -118,7 +118,7 @@ def get_element(
 ) -> Union[ET.Element, str, None]:
     """Get element using Element tree xpath syntax."""
     path = f"./{'/'.join(attribute_path.split('.'))}"
-    print(path)
+    #print(path)
     element = root.findall(path)
     if not element:
         if silent_error:
