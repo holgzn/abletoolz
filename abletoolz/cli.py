@@ -169,6 +169,14 @@ def parse_arguments() -> argparse.Namespace:
         "colors, so the results are limited, but you still can get some decent results. This uses the CIE2000 "
         "algorithm which helps create a gradient more natural to the human eye.",
     )
+
+    parser.add_argument(
+        "--number-tracks",
+        action="store_true",
+        default=False,
+        help="Ensure all tracks names are numbered in sequence (user name starts with #)",
+    )
+
     parser.add_argument(
         "--trim-drum-rack",
         metavar="TRACK_ID",
@@ -205,6 +213,12 @@ def parse_arguments() -> argparse.Namespace:
         "you save your project, so take it with a grain of salt. AU are not stored as paths in "
         "sets but abbreviated component names. Might possibly add support for them later.",
     )
+    parser.add_argument(
+        "--show-master-info",
+        action="store_true",
+        default=False,
+        help="Show info text from master track",
+    )
 
     args = parser.parse_args()
     print(args)
@@ -225,6 +239,7 @@ def parse_arguments() -> argparse.Namespace:
                 args.fold,
                 args.gradient_tracks,
                 args.list_tracks,
+                args.show_master_info,
                 args.master_out,
                 args.prepend_version,
                 args.save,
@@ -266,6 +281,9 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         ableton_set.set_track_widths(args.set_track_widths)
     if args.gradient_tracks:
         ableton_set.gradient_tracks()
+    if args.number_tracks:
+        ableton_set.load_tracks()
+        ableton_set.number_tracks()
 
     
 
@@ -279,6 +297,9 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         vst_dirs: List[pathlib.Path] = []
         result = ableton_set.list_plugins(vst_dirs)
         vst_dirs = list(set(result))
+
+    if args.show_master_info:
+        ableton_set.show_master_meta()
 
     if args.trim_drum_rack:
         ableton_set.load_tracks()

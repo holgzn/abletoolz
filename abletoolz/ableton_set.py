@@ -1047,6 +1047,7 @@ class AbletonSet(object):
         pointee_element.set("Value", str(next_pointee_id))
         
         track_container = self.root.find("LiveSet/Tracks")
+        # TODO the track could be inside a group
         new_position = list(track_container).index(track.track_root) + 1
 
 
@@ -1063,3 +1064,26 @@ class AbletonSet(object):
         for track in all_tracks:
             max_id = max(max_id, int(track.get("Id")))
         return max_id
+
+    def number_tracks(self):
+        """Ensure all tracks will show sequence a number in their name. Will set the UserName to start with '#-'"""
+        for track in self.tracks:
+            if track.type == "ReturnTrack":
+                continue
+            user_name_element = track.track_root.find("Name/UserName")
+            user_name = user_name_element.get("Value")
+            if not user_name.startswith("#"):
+                base_name = user_name
+                if not base_name:
+                    base_name = track.track_root.find("Name/EffectiveName").get("Value")
+                base_name = re.sub("^[0-9]- *", "", base_name)
+                new_name =f"#-{base_name}"
+                user_name_element.set("Value", new_name)
+                track.name =  new_name
+
+    def show_master_meta(self):
+        info_text = self.root.find("LiveSet/MasterTrack/Name/Annotation").get("Value")
+        if info_text:
+            logger.info("%sMaster track info text: %s%s",C, G, info_text)
+        else:
+            logger.info("%sMaster track has no info text.",Y)
