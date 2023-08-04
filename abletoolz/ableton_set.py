@@ -1,4 +1,5 @@
 """Ableton set parsing."""
+import copy
 import enum
 import functools
 import gzip
@@ -878,44 +879,166 @@ class AbletonSet(object):
 
     def split_drum_rack(self, drum_track_id)-> None:
         track_found = False
+        splitted_something = False
+        processed_groups = 0
         for track in self.tracks:
             if track.id == drum_track_id:
                 track_found = True
-                
-                
-                logger.info("%Spliiting drum rack(s) on track %s", C, drum_track_id)
-                drum_groups = track.track_root.findall("DeviceChain//DrumGroupDevice")
-                if len(drum_groups) == 0:
-                    logger.error("%sNo drum rack(s) found on track %s", R ,drum_track_id)
+                logger.info("%sSplitting drum rack(s) on track %s", C, drum_track_id)
+                if len(track.track_root.findall(".//DrumBranch")) == 0:
+                    logger.error("%sNo drum rack chains found on track %s", R ,drum_track_id)
                     break
-                splitted_something = False
-
-                processed_groups = 0
-                
-                for drum_group in drum_groups:
-                    group_name = drum_group.find("UserName").get("Value") # TODO alternate name    
-                    branch_container = drum_group.find("Branches")
-                    branches = branch_container.findall("DrumBranch")
-                    new_track = None
-                    if len(branches) > 1:
-                        branch = branches[0]
-                        id = branch.get("Id")
-                        new_track = self.duplicate_track(track)
-                        to_remove = new_track.find(f"DeviceChain//DrumBranch[@Id='{id}']")
-                        to_remove_from = new_track.find(f"DeviceChain//DrumBranch[@Id='{id}']../") #Todo use ID Of BRnaches parent?
-                        to_remove_from.remove(to_remove)
-                        for branch in branches[1:]:
-                            branch_container.remove(branch)
-                        # TODO remove all other drum groups except the one that we just stripped down
-
-
-
-
-                        branch_container.remove(branch)
-                        splitted_something = True
+                else:
+                    self._process(track)
                 break #track was found
-                              
         if not track_found:
             logger.error("%sTrack %s was not found", R, drum_track_id)
-        elif not splitted_something:
-            logger.info("%sTrack %s had no chains to extract", G, drum_track_id)
+        # elif not splitted_something:
+        #     logger.info("%sTrack %s had no chains to extract", G, drum_track_id)
+
+    def _process(self, track: AbletonTrack):
+        print ("on track "+track.id+" "+track.name)
+        drum_groups = track.track_root.findall("DeviceChain//DrumGroupDevice")
+        print (str(len(drum_groups))+" drum groups")
+        if len(drum_groups) == 0:
+            #delete track without any drum groups
+            print("delte track without groups")
+            self.find_parent(self.root, track.track_root).remove(track.track_root)
+        elif len(drum_groups) > 0:
+            drum_group = drum_groups[0]
+            branch_container = drum_group.find("Branches")
+            branches = branch_container.findall("DrumBranch")
+            if len(branches) == 0:
+                # the group is empty, so we remove it and then start over again to get to the next group (if any)
+                print("first group is empty, deleting it and re-starting")
+                self.find_parent(track.track_root, drum_group).remove(drum_group)
+                self._process(track)
+            elif len(branches) > 1:
+                branch = branches[0]
+                branch_name = branch.find("Name/UserName").get("Value")
+                if not branch_name:
+                    branch_name = branch.find("Name/EffectiveName").get("Value")
+                print("branch " +branch_name)
+                branch.set("_copyHelper","HELLO")
+                new_track = self._duplicate_track(track)
+                branch.attrib.pop("_copyHelper")
+
+                print("relabeling this track to" +branch_name)
+                track.name = branch_name
+                track.track_root.find("Name/UserName").set("Value", branch_name)
+                
+                new_track_root = new_track.track_root
+                
+                to_remove = new_track_root.find(f"DeviceChain//DrumBranch[@_copyHelper='HELLO']")
+                to_remove_from = self.find_parent(new_track_root, to_remove)
+                #to_remove_from = new_track.find(f"DeviceChain//DrumBranch[@_copyHelper='HELLO']/..")
+                to_remove_from.remove(to_remove)
+
+                print("removing "+str(len(branches[1::]))+" remainging branches this group "+ track.id)
+                for branch in branches[1:]:
+                    self.find_parent(track.track_root, branch).remove(branch)
+
+                print("removing "+str(len(drum_groups[1::]))+" remainging groups from track "+ track.id)
+                for group in drum_groups[1::]:
+                    self.find_parent(track.track_root, group).remove(group)
+
+                print("cleaning up instrument rack chains")
+                drum_group.set("_lookupHelper","1")
+                #is_in_instr_group = track.track_root.find("DeviceChain/DeviceChain/Devices//InstrumentGroupDevice//DrumGroupDevice[@_lookupHelper='1']")
+                #if is_in_instr_group:
+
+                
+
+                drum_group.attrib.pop("_lookupHelper","1")
+                print("recursing into new track "+new_track.id)
+                self._process(new_track)
+            else:
+                #only one chain
+                print("---- reached single-chain group")
+                branch = branches[0]
+                branch_name = branch.find("Name/UserName").get("Value")
+                if not branch_name:
+                    branch_name = branch.find("Name/EffectiveName").get("Value")
+                
+                print("relabeling to "+branch_name)
+                track.name = branch_name
+                track.track_root.find("Name/UserName").set("Value", branch_name)
+
+                drum_group.set("_copyHelper","HELLO")
+                new_track = self._duplicate_track(track)
+                drum_group.attrib.pop("_copyHelper")
+        
+                new_track_root = new_track.track_root
+            
+                to_remove = new_track_root.find(f"DeviceChain//DrumGroupDevice[@_copyHelper='HELLO']")
+                to_remove_from = self.find_parent(new_track_root, to_remove)
+                to_remove_from.remove(to_remove)
+
+                print("removing "+str(len(drum_groups[1::]))+" remainging groups from track "+ track.id)
+                for group in drum_groups[1::]:
+                    self.find_parent(track.track_root, group).remove(group)
+
+                print("recursing into new track "+new_track.id)
+                self._process(new_track)
+
+                
+                
+
+
+                
+                
+
+    def find_parent(self, root, element):
+        for parent in root.iter():
+            for child in parent:
+                if child is element:
+                    return parent
+
+    def _duplicate_track(self, track: AbletonTrack) -> AbletonTrack:
+        
+        new_track_element = copy.deepcopy(track.track_root)
+        new_track_element.set("Id",str(self._get_max_track_id() + 1))
+
+        print ("duplicating track "+track.id+" to track "+new_track_element.get("Id"))
+        
+        pointee_element = self.root.find("LiveSet/NextPointeeId")
+        next_pointee_id = int(pointee_element.get("Value"))
+        #print(next_pointee_id)
+        pointees = new_track_element.findall(".//PointeeId") \
+            + new_track_element.findall(".//AutomationTarget") \
+            + new_track_element.findall(".//ModulationTarget") \
+            + new_track_element.findall(".//FluxModulationTarget") \
+            + new_track_element.findall(".//GrainSizeModulationTarget") \
+            + new_track_element.findall(".//SampleOffsetModulationTarget") \
+            + new_track_element.findall(".//TranspositionModulationTarget") \
+            + new_track_element.findall(".//VolumeModulationTarget") \
+            + new_track_element.findall(".//EnvelopeTarget")
+        
+        #print(str(len(pointees))+" pointees in new track")
+        for p in pointees:
+            if p.tag == "PointeeId":
+                p.set("Value", str(next_pointee_id))
+            else:
+                p.set("Id", str(next_pointee_id))
+            next_pointee_id += 1
+            # print(next_pointee_id)
+        
+        pointee_element.set("Value", str(next_pointee_id))
+        
+        track_container = self.root.find("LiveSet/Tracks")
+        new_position = list(track_container).index(track.track_root) + 1
+
+
+        #new_position = len(self.root.findall("LiveSet/Tracks/*")) - len(self.root.findall("LiveSet/Tracks/ReturnTrack")) 
+        
+        track_container.insert(new_position, new_track_element)
+        new_track = AbletonTrack(new_track_element, self.version_tuple)
+        self.tracks.insert(new_position, new_track)
+        return new_track
+
+    def _get_max_track_id(self) -> int:
+        max_id = 0
+        all_tracks = self.root.findall("LiveSet/Tracks/*")
+        for track in all_tracks:
+            max_id = max(max_id, int(track.get("Id")))
+        return max_id

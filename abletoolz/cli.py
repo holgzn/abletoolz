@@ -267,9 +267,7 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
     if args.gradient_tracks:
         ableton_set.gradient_tracks()
 
-    if args.list_tracks:
-        ableton_set.load_tracks()
-        ableton_set.print_tracks()
+    
 
     if args.check_samples:
         ableton_set.list_samples()
@@ -288,7 +286,11 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
 
     if args.split_drum_rack:
         ableton_set.load_tracks()
-        ableton_set.split_drum_racks(args.trim_drum_rack)
+        ableton_set.split_drum_racks(args.split_drum_rack)
+
+    if args.list_tracks:
+        ableton_set.load_tracks()
+        ableton_set.print_tracks()
 
     if args.xml:
         ableton_set.save_xml()
