@@ -815,12 +815,12 @@ class AbletonSet(object):
             for sub_ind, clip_clr_ele in zip(clip_view_gradient, arangement_clr_elements):
                 clip_clr_ele.set("Value", str(sub_ind))
 
-    def trim_drum_racks(self, drum_track_ids)-> None:
+    def trim_drum_racks(self, drum_track_ids: list[str])-> None:
+        """Remove all chains from all drum racks on the given tracks that don't have any active notes in the session arrangement clips"""
         for id in drum_track_ids:
-            self.trim_drum_rack(id)
+            self._trim_drum_rack(id)
 
-    def trim_drum_rack(self, drum_track_id)-> None:
-        """Remove all chains from all drum racks on the given track that don't have any active notes in the session arrangement clips"""
+    def _trim_drum_rack(self, drum_track_id: list[str])-> None:
         track_found = False
         for track in self.tracks:
             if track.id == drum_track_id:
@@ -835,7 +835,9 @@ class AbletonSet(object):
                 played_notes =  self._get_unique_notes(clips)
                 removed_something = False
                 for drum_group in drum_groups:
-                    group_name = drum_group.find("UserName").get("Value") # TODO alternate name    
+                    group_name = drum_group.find("UserName").get("Value")
+                    if not group_name:
+                        group_name = "UNKNOWN"
                     branches_to_remove = self._get_unused_drum_branches(drum_group, played_notes)
                     branch_container = drum_group.find("Branches")
                     for id in branches_to_remove:
@@ -1081,7 +1083,6 @@ class AbletonSet(object):
         pointee_element.set("Value", str(next_pointee_id))
         
         track_container = self.root.find("LiveSet/Tracks")
-        # TODO the track could be inside a group
         new_position = list(track_container).index(track.track_root) + 1
 
 
