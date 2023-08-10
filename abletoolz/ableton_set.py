@@ -817,6 +817,13 @@ class AbletonSet(object):
 
     def trim_drum_racks(self, drum_track_ids: list[str])-> None:
         """Remove all chains from all drum racks on the given tracks that don't have any active notes in the session arrangement clips"""
+        if len(drum_track_ids) == 1 and drum_track_ids[0] == "all":
+            track_ids = set()
+            for drums in self.root.findall(".//DrumGroupDevice"):
+                print(drums)
+                track_ids.add(self.find_parent(self.root, drums, "MidiTrack").get("Id"))
+            self.trim_drum_racks(list(track_ids))
+            return
         for id in drum_track_ids:
             self._trim_drum_rack(id)
 
@@ -875,11 +882,18 @@ class AbletonSet(object):
                 played_notes.add(int(key.get("Value")))  
         return played_notes
 
-    def split_drum_racks(self, drum_track_ids)-> None:
+    def split_drum_racks(self, drum_track_ids: list[str])-> None:
+        if len(drum_track_ids) == 1 and drum_track_ids[0] == "all":
+            track_ids = set()
+            for drums in self.root.findall(".//DrumGroupDevice"):
+                print(drums)
+                track_ids.add(self.find_parent(self.root, drums, "MidiTrack").get("Id"))
+            self.split_drum_racks(list(track_ids))
+            return
         for id in drum_track_ids:
-            self.split_drum_rack(id)
+            self._split_drum_rack(id)
 
-    def split_drum_rack(self, drum_track_id)-> None:
+    def _split_drum_rack(self, drum_track_id: str)-> None:
         track_found = False
         splitted_something = False
         processed_groups = 0
@@ -1061,28 +1075,31 @@ class AbletonSet(object):
                 midi_note = int(key.get("Value"))
                 if not midi_note in received_notes:
                     print("removing MIDI note " + str(midi_note))
-                    key_track = self.find_parent_of_type(clip, key, "KeyTrack")
+                    key_track = self.find_parent(clip, key, "KeyTrack")
                     self.find_parent(clip, key_track).remove(key_track)
             #TODO need to fix Ids of KeyTrack elements? 
 
+    def _build_loopup(self, root: ET.Element, element: ET.Element):
+        d = dict()
+        for p in root.iter():
+            for c in p:
+                d[c]=p
+                if c == element:
+                    return d
+        raise "Looks like the element is not in the tree of root"
 
-
-
-    def find_parent(self, root, element):
-        for parent in root.iter():
-            for child in parent:
-                if child is element:
-                    return parent
-
-    def find_parent_of_type(self, root: ET.Element, element: ET.Element, type: str):
-        for parent in root.iter():
-            for child in parent:
-                if child is element:
-                    if parent.tag == type:
-                        return parent
-                    else:
-                        return None
-                    
+    def find_parent(self, root: ET.Element, element: ET.Element, type: str = None):
+        d = self._build_loopup(root, element)
+        print("searching first parent of "+str(element)+" with type "+str(type))
+        found = False
+        candidate = element
+        while candidate != root:
+            candidate = d[candidate]
+            if type == None or candidate.tag == type:
+                return candidate
+        return None
+    
+        
 
     def test(self):
         #pointee_element = self.root.find("LiveSet/NextPointeeId")
