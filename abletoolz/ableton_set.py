@@ -891,14 +891,14 @@ class AbletonSet(object):
                     logger.error("%sNo drum rack chains found on track %s", R ,drum_track_id)
                     break
                 else:
-                    self._process(track)
+                    self._process_drum_split(track)
                 break #track was found
         if not track_found:
             logger.error("%sTrack %s was not found", R, drum_track_id)
         # elif not splitted_something:
         #     logger.info("%sTrack %s had no chains to extract", G, drum_track_id)
 
-    def _process(self, track: AbletonTrack):
+    def _process_drum_split(self, track: AbletonTrack):
         print ("///----- on track "+track.id+" "+track.name)
         drum_groups = track.track_root.findall("DeviceChain//DrumGroupDevice")
         print (str(len(drum_groups))+" drum groups")
@@ -914,7 +914,7 @@ class AbletonSet(object):
                 # the group is empty, so we remove it and then start over again to get to the next group (if any)
                 print("first group is empty, deleting it and re-starting")
                 self.find_parent(track.track_root, drum_group).remove(drum_group)
-                self._process(track)
+                self._process_drum_split(track)
             elif len(branches) > 1:
                 branch = branches[0]
                 branch_name = branch.find("Name/UserName").get("Value")
@@ -944,7 +944,7 @@ class AbletonSet(object):
                     self.find_parent(track.track_root, group).remove(group)
 
                 print("::cleaning up instrument rack chains")
-                drum_group.set("_lookupHelper","1")
+                #drum_group.set("_lookupHelper","1")
                 # could also walk up the tree and check for InstrumentGroupDevice, but this is less code
                 # TODO: we need to walk up the tree to grab the InstrumentGroupDevice anyways, so we can just do that, we have the exit criteria 'MidiTrack' anyways
                 #is_in_instr_group = track.track_root.find("DeviceChain/DeviceChain/Devices//InstrumentGroupDevice//DrumGroupDevice[@_lookupHelper='1']")
@@ -976,10 +976,9 @@ class AbletonSet(object):
                 if not found_instr_group:
                     print("No instrument rack found")
 
-                drum_group.attrib.pop("_lookupHelper","1")
                 self._clear_ineffective_drum_notes(track)
                 print("recursing into new track "+new_track.id)
-                self._process(new_track)
+                self._process_drum_split(new_track)
             else:
                 #only one chain
                 print("---- reached single-chain group")
@@ -1007,8 +1006,41 @@ class AbletonSet(object):
                     self.find_parent(track.track_root, group).remove(group)
 
                 self._clear_ineffective_drum_notes(track)
+
+                print("::cleaning up instrument rack chains")
+                drum_group.set("_lookupHelper","1")
+                is_in_instr_group = track.track_root.find("DeviceChain/DeviceChain/Devices//InstrumentGroupDevice//DrumGroupDevice[@_lookupHelper='1']")
+                drum_group.attrib.pop("_lookupHelper","1")
+                if is_in_instr_group:
+                    #This drum rack is part of an instrument rack
+                    parent = drum_group
+                    found_instr_group = False
+                    while parent.tag != "MidiTrack":
+                        parent = self.find_parent(track.track_root, parent)
+                        if parent.tag == "InstrumentGroupDevice":
+                            found_instr_group = True
+                            #we have found the intrument rack
+                            print("instrument rack found " + parent.tag +" " + parent.get("Id"))
+                            #now, remove all intrunment chains that contain drum racks (except the one)
+                            instr_branch_container = parent.find("Branches")
+                            instr_branches = instr_branch_container.findall("InstrumentBranch")
+                            print("instrument rack contains "+str(len(instr_branches))+" branches")
+                            for instr_branch in instr_branches:
+                                devices = instr_branch.findall("DeviceChain//Devices/*")
+                                # TODO there could be devices like EQ left which make no sense if the drums are gone
+                                # and we can be pretty sure that there was no other midi-to-audio device here, right?
+                                if len(devices) == 0: #devices is empty
+                                    print("__________ removing empty instrument branch "+instr_branch.get("Id"))
+                                    instr_branch_container.remove(instr_branch)
+                                else:
+                                    print("instrument chain "+instr_branch.get("Id")+" kept due to "+str(len(devices))+" devices:")
+                                    print("    "+str(devices))
+                            break #stop walking up
+                    if not found_instr_group:
+                        print("No instrument rack found")
+
                 print("recursing into new track "+new_track.id)
-                self._process(new_track)
+                self._process_drum_split(new_track)
   
 
     def _clear_ineffective_drum_notes(self, track: AbletonTrack):
@@ -1050,18 +1082,21 @@ class AbletonSet(object):
                         return parent
                     else:
                         return None
+                    
 
-    def _duplicate_track(self, track: AbletonTrack) -> AbletonTrack:
-        
-        new_track_element = copy.deepcopy(track.track_root)
-        new_track_element.set("Id",str(self._get_max_track_id() + 1))
+    def test(self):
+        #pointee_element = self.root.find("LiveSet/NextPointeeId")
+        #pointee_element.set("Value", "1")
+        #self._fixPointees(self.tracks[0])
+        self._duplicate_track(self.tracks[0])
 
-        print ("duplicating track "+track.id+" to track "+new_track_element.get("Id"))
-        
+    def _fixPointees(self, track: AbletonTrack):
         pointee_element = self.root.find("LiveSet/NextPointeeId")
         next_pointee_id = int(pointee_element.get("Value"))
         #print(next_pointee_id)
-        pointees = new_track_element.findall(".//PointeeId") \
+        new_track_element = track.track_root
+
+        pointees = new_track_element.findall(".//Pointee") \
             + new_track_element.findall(".//AutomationTarget") \
             + new_track_element.findall(".//ModulationTarget") \
             + new_track_element.findall(".//FluxModulationTarget") \
@@ -1069,28 +1104,61 @@ class AbletonSet(object):
             + new_track_element.findall(".//SampleOffsetModulationTarget") \
             + new_track_element.findall(".//TranspositionModulationTarget") \
             + new_track_element.findall(".//VolumeModulationTarget") \
-            + new_track_element.findall(".//EnvelopeTarget")
-        
+            + new_track_element.findall(".//MidiControllers")
+
         #print(str(len(pointees))+" pointees in new track")
         for p in pointees:
-            if p.tag == "PointeeId":
-                p.set("Value", str(next_pointee_id))
+            #print(p.tag)
+            # if p.tag == "PointeeId":
+            #     p.set("Value", str(next_pointee_id))
+            if p.tag == "MidiControllers":
+                for e in p:
+                    if e.tag.startswith("ControllerTargets."):
+                        new_id = str(next_pointee_id)
+                        self._fixSinglePointee(new_track_element, e, new_id)
+                        next_pointee_id += 1
             else:
-                p.set("Id", str(next_pointee_id))
+                new_id = str(next_pointee_id)
+                self._fixSinglePointee(new_track_element, p, new_id)
+
             next_pointee_id += 1
             # print(next_pointee_id)
         
         pointee_element.set("Value", str(next_pointee_id))
+
+    def _fixSinglePointee(self, new_track_element,  e, new_id):
+        old_id = e.get("Id")
+        e.set("Id", new_id)
+        automations = new_track_element.findall(".//EnvelopeTarget/PointeeId[@Value='"+old_id+"']")
+        for automation in automations:
+            automation.set("Value", new_id)
+
+    def _duplicate_track(self, track: AbletonTrack) -> AbletonTrack:
+        
+        new_track_id = self._get_max_track_id() + 1
+        print ("duplicating track "+track.id+" to track "+str(new_track_id))
+        
+        new_track_element = copy.deepcopy(track.track_root)
+        new_track_element.set("Id", str(new_track_id))
+        
+        new_track = AbletonTrack(new_track_element, self.version_tuple)
+        self._fixPointees(new_track)
+
+        device_selectors = new_track_element.findall("SelectedDevice")
+        for selector in device_selectors:
+            device_selectors.set("Value", "0")
+        device_selectors = new_track_element.findall("SelectedEnvelope")
+        for selector in device_selectors:
+            device_selectors.set("Value", "0")
+        device_selectors = new_track_element.findall("IsSelected")
+        for selector in device_selectors:
+            device_selectors.set("Value", "false")
         
         track_container = self.root.find("LiveSet/Tracks")
         new_position = list(track_container).index(track.track_root) + 1
-
-
-        #new_position = len(self.root.findall("LiveSet/Tracks/*")) - len(self.root.findall("LiveSet/Tracks/ReturnTrack")) 
-        
         track_container.insert(new_position, new_track_element)
-        new_track = AbletonTrack(new_track_element, self.version_tuple)
         self.tracks.insert(new_position, new_track)
+
         return new_track
 
     def _get_max_track_id(self) -> int:
@@ -1116,7 +1184,7 @@ class AbletonSet(object):
                 user_name_element.set("Value", new_name)
                 track.name =  new_name
 
-    def show_master_meta(self):
+    def show_master_notes(self):
         info_text = self.root.find("LiveSet/MasterTrack/Name/Annotation").get("Value")
         if info_text:
             logger.info("%sMaster track info text: %s%s",C, G, info_text)

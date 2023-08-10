@@ -214,14 +214,19 @@ def parse_arguments() -> argparse.Namespace:
         "sets but abbreviated component names. Might possibly add support for them later.",
     )
     parser.add_argument(
-        "--show-master-info",
+        "--show-master-notes",
         action="store_true",
         default=False,
-        help="Show info text from master track",
+        help="Show the info text of the master track",
+    )
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        default=False,
+        help="TEST",
     )
 
     args = parser.parse_args()
-    print(args)
     assert not (
         args.fix_samples_absolute and args.fix_samples_collect
     ), "Can only use --fix-samples-collect or --fix-samples-absolute, not both!"
@@ -239,7 +244,7 @@ def parse_arguments() -> argparse.Namespace:
                 args.fold,
                 args.gradient_tracks,
                 args.list_tracks,
-                args.show_master_info,
+                args.show_master_notes,
                 args.master_out,
                 args.prepend_version,
                 args.save,
@@ -285,7 +290,13 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         ableton_set.load_tracks()
         ableton_set.number_tracks()
 
-    
+    if args.trim_drum_rack:
+        ableton_set.load_tracks()
+        ableton_set.trim_drum_racks(args.trim_drum_rack)
+
+    if args.split_drum_rack:
+        ableton_set.load_tracks()
+        ableton_set.split_drum_racks(args.split_drum_rack)
 
     if args.check_samples:
         ableton_set.list_samples()
@@ -298,16 +309,12 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         result = ableton_set.list_plugins(vst_dirs)
         vst_dirs = list(set(result))
 
-    if args.show_master_info:
-        ableton_set.show_master_meta()
+    if args.show_master_notes:
+        ableton_set.show_master_notes()
 
-    if args.trim_drum_rack:
+    if args.test:
         ableton_set.load_tracks()
-        ableton_set.trim_drum_racks(args.trim_drum_rack)
-
-    if args.split_drum_rack:
-        ableton_set.load_tracks()
-        ableton_set.split_drum_racks(args.split_drum_rack)
+        ableton_set.test();
 
     if args.list_tracks:
         ableton_set.load_tracks()
