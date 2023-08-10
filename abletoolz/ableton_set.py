@@ -958,37 +958,26 @@ class AbletonSet(object):
                     self.find_parent(track.track_root, group).remove(group)
 
                 print("::cleaning up instrument rack chains")
-                #drum_group.set("_lookupHelper","1")
-                # could also walk up the tree and check for InstrumentGroupDevice, but this is less code
-                # TODO: we need to walk up the tree to grab the InstrumentGroupDevice anyways, so we can just do that, we have the exit criteria 'MidiTrack' anyways
-                #is_in_instr_group = track.track_root.find("DeviceChain/DeviceChain/Devices//InstrumentGroupDevice//DrumGroupDevice[@_lookupHelper='1']")
-                #if is_in_instr_group:
-                    #This drum rack is part of an instrument rack
-                parent = drum_group
-                found_instr_group = False
-                while parent.tag != "MidiTrack":
-                    parent = self.find_parent(track.track_root, parent)
-                    if parent.tag == "InstrumentGroupDevice":
-                        found_instr_group = True
-                        #we have found the intrument rack
-                        print("instrument rack found " + parent.tag +" " + parent.get("Id"))
-                        #now, remove all intrunment chains that contain drum racks (except the one)
-                        instr_branch_container = parent.find("Branches")
-                        instr_branches = instr_branch_container.findall("InstrumentBranch")
-                        print("instrument rack contains "+str(len(instr_branches))+" branches")
-                        for instr_branch in instr_branches:
-                            devices = instr_branch.findall("DeviceChain//Devices/*")
-                            # TODO there could be devices like EQ left which make no sense if the drums are gone
-                            # and we can be pretty sure that there was no other midi-to-audio device here, right?
-                            if len(devices) == 0: #devices is empty
-                                print("__________ removing empty instrument branch "+instr_branch.get("Id"))
-                                instr_branch_container.remove(instr_branch)
-                            else:
-                                print("instrument chain "+instr_branch.get("Id")+" kept due to "+str(len(devices))+" devices:")
-                                print("    "+str(devices))
-                        break #stop walking up
-                if not found_instr_group:
+                instr_group = self.find_parent(track.track_root, drum_group, "InstrumentGroupDevice")
+                if instr_group is not None:
+                    print("instrument rack found " + instr_group.tag +" " + instr_group.get("Id"))
+                    #now, remove all intrunment chains that contain drum racks (except the one)
+                    instr_branch_container = instr_group.find("Branches")
+                    instr_branches = instr_branch_container.findall("InstrumentBranch")
+                    print("instrument rack contains "+str(len(instr_branches))+" branches")
+                    for instr_branch in instr_branches:
+                        devices = instr_branch.findall("DeviceChain//Devices/*")
+                        # TODO there could be devices like EQ left which make no sense if the drums are gone
+                        # and we can be pretty sure that there was no other midi-to-audio device here, right?
+                        if len(devices) == 0: #devices is empty
+                            print("__________ removing empty instrument branch "+instr_branch.get("Id"))
+                            instr_branch_container.remove(instr_branch)
+                        else:
+                            print("instrument chain "+instr_branch.get("Id")+" kept due to "+str(len(devices))+" devices:")
+                            print("    "+str(devices))
+                else:
                     print("No instrument rack found")
+
 
                 self._clear_ineffective_drum_notes(track)
                 print("recursing into new track "+new_track.id)
