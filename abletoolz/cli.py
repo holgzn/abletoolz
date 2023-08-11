@@ -100,6 +100,13 @@ def parse_arguments() -> argparse.Namespace:
         "to avoid overwriting files.",
     )
     parser.add_argument(
+        "-n",
+        "--new",
+        action="store_true",
+        default=False,
+        help="Don't overwrite when saving but rather create a new file. Assumes that you're adding something to the original file name. In this case, no backup is created.",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -113,6 +120,11 @@ def parse_arguments() -> argparse.Namespace:
         default=False,
         help="Append furthest bar length and bpm to filename to help organize your set collection. "
         "For example, my_set.als --> my_set_32bars_90.00bpm.als Option only works with -s/--save",
+    )
+    parser.add_argument(
+        "--append-name",
+        metavar="VALUE",
+        help="Append someting to the file name when saving",
     )
     parser.add_argument(
         "--prepend-version",
@@ -181,13 +193,13 @@ def parse_arguments() -> argparse.Namespace:
         "--trim-drum-rack",
         metavar="TRACK_ID",
         nargs="+",
-        help="Remove all unsued chains from the drum rack on the given track.",
+        help="Remove all unsued chains from the drum rack on the given track. Using 'all' as argument will apply to all tracks with drum racks.",
     )
     parser.add_argument(
         "--split-drum-rack",
         metavar="TRACK_ID",
         nargs="+",
-        help="Split the drum chains of the drum rack on the given track into multiple new tracks, preserving sends on the track and the drum rack itself. If combined with drum rack trimming, the trimming is done first.",
+        help="Split the drum chains of the drum rack on the given track into multiple new tracks, preserving sends on the track and the drum rack itself. Using 'all' as argument will apply to all tracks with drum racks. If combined with drum rack trimming, the trimming is done first.",
     )
 
     # Analysis arguments.
@@ -248,6 +260,8 @@ def parse_arguments() -> argparse.Namespace:
                 args.master_out,
                 args.prepend_version,
                 args.save,
+                args.append_name,
+                args.new,
                 args.set_track_heights,
                 args.set_track_widths,
                 args.unfold,
@@ -326,10 +340,11 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         # if backup == ableton_set:
         #     logger.info("%sSet has no changes from originally, not saving...", MB)
         #     return 0
-        ableton_set.save_set(append_bars_bpm=args.append_bars_bpm, prepend_version=args.prepend_version)
+        ableton_set.save_set(append_bars_bpm=args.append_bars_bpm, prepend_version=args.prepend_version, append_name=args.append_name, new=args.new)
     elif any(
         [
             args.append_bars_bpm,
+            args.append_name,
             args.check_plugins,
             args.check_samples,
             args.cue_out,

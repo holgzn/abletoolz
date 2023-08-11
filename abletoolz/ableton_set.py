@@ -16,7 +16,7 @@ from xml.etree import ElementTree as ET
 
 from abletoolz import color_tools, utils
 from abletoolz.ableton_track import AbletonTrack
-from abletoolz.misc import CB, RB, RST, STEREO_OUTPUTS, B, C, G, M, R, Y, get_element
+from abletoolz.misc import CB, RB, RST, STEREO_OUTPUTS, B, C, G, M, R, Y, get_element, ElementNotFound
 
 if sys.platform == "win32":
     import win32_setctime
@@ -277,7 +277,7 @@ class AbletonSet(object):
         logger.info("%sSaved set to %s", G, self.path)
         self.restore_file_times(self.path)
 
-    def save_set(self, append_bars_bpm: bool = False, prepend_version: bool = False) -> None:
+    def save_set(self, append_bars_bpm: bool = False, prepend_version: bool = False, append_name: str = None, new: bool = False) -> None:
         """Save set to disk with optional filename modifications.
 
         This function saves the current set to disk, first creating a backup of the original file.
@@ -288,12 +288,24 @@ class AbletonSet(object):
             append_bars_bpm: If True, append the number of bars and BPM to the filename.
             prepend_version: If True, prepend the version number to the filename.
         """
-        utils.create_backup(self.path)
+        if new:
+            if not (append_name or append_bars_bpm or prepend_version):
+                raise ValueError("Cannot create a new file wihout adding something to the name")
+        if not new:
+            utils.create_backup(self.path)
         if append_bars_bpm:
             cleaned_name = re.sub(r"_\d{1,3}bars_\d{1,3}\.\d{2}bpm", "", self.path.stem)
             new_filename = cleaned_name + f"_{self.furthest_bar}bars_{self.bpm:.2f}bpm.als"
             self.path = pathlib.Path(self.path.parent / new_filename)
             logger.debug("%sAppending bars and bpm, new set name: %s.als", M, self.path.stem)
+
+        if append_name is not None:
+            cleaned_name = re.sub(r"\.als$", "", self.path.stem)
+            to_append = re.sub(r"\s", "_", append_name)
+            new_filename =  f"{cleaned_name}_{to_append}.als"
+            self.path = pathlib.Path(self.path.parent / new_filename)
+            logger.debug("%sAppending custom text, new name %s.als", M, self.path.stem)
+
 
         if self.version_tuple and prepend_version:
             version_string = f"{self.version_tuple[0]}.{self.version_tuple[1]}.{self.version_tuple[2]}_"
@@ -1075,7 +1087,7 @@ class AbletonSet(object):
                 d[c]=p
                 if c == element:
                     return d
-        raise "Looks like the element is not in the tree of root"
+        raise ElementNotFound("Looks like the element is not in the tree of root")
 
     def find_parent(self, root: ET.Element, element: ET.Element, type: str = None):
         d = self._build_loopup(root, element)
