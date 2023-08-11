@@ -201,6 +201,12 @@ def parse_arguments() -> argparse.Namespace:
         nargs="+",
         help="Split the drum chains of the drum rack on the given track into multiple new tracks, preserving sends on the track and the drum rack itself. Using 'all' as argument will apply to all tracks with drum racks. If combined with drum rack trimming, the trimming is done first.",
     )
+    parser.add_argument(
+        "--split-midi-track",
+        metavar="TRACK_ID",
+        nargs="+",
+        help="Create a new MIDI track for each note that is played by the given track. Useful to create individual tracks for intruments that behave like a drum drack",
+    )
 
     # Analysis arguments.
     parser.add_argument(
@@ -266,6 +272,9 @@ def parse_arguments() -> argparse.Namespace:
                 args.set_track_widths,
                 args.unfold,
                 args.xml,
+                args.trim_drum_rack,
+                args.split_drum_rack,
+                args.split_midi_track
             ]
         )
     ), "--db/--database cannot be used with other commands!"
@@ -311,6 +320,10 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
     if args.split_drum_rack:
         ableton_set.load_tracks()
         ableton_set.split_drum_racks(args.split_drum_rack)
+
+    if args.split_midi_track:
+        ableton_set.load_tracks()
+        ableton_set.split_midi_tracks(args.split_midi_track)
 
     if args.check_samples:
         ableton_set.list_samples()
@@ -358,7 +371,8 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
             args.set_track_widths,
             args.unfold,
             args.trim_drum_rack,
-            args.split_drum_rack
+            args.split_drum_rack,
+            args.split_midi_track
         ]
     ):
         logger.info("%sNo changes saved, use -s/--save option to write changes to file.", Y)

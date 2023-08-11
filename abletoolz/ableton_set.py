@@ -894,6 +894,38 @@ class AbletonSet(object):
                 played_notes.add(int(key.get("Value")))  
         return played_notes
 
+    def split_midi_tracks(self, midi_track_ids: list[str]) -> None:
+        for id in midi_track_ids:
+            self._split_midi_track(id)
+
+    def _split_midi_track(self, midi_track_id: str) -> None:
+        track_found = False
+        splitted_something = False
+        processed_groups = 0
+        for track in self.tracks:
+            if track.id == midi_track_id and track.type == "MidiTrack":
+                track_found = True
+                logger.info("%sSplitting MIDI track %s", C, midi_track_id)
+                self._process_midi_split(track)
+                break #track was found
+        if not track_found:
+            logger.error("%sTrack %s was not found or is not a MIDI track", R, midi_track_id)
+
+    def _process_midi_split(self, track: AbletonTrack):
+        print ("/// MIDI split -- on track "+track.id+" "+track.name)
+        clips = track.track_root.findall("DeviceChain//MidiClip/Disabled[@Value='false']/..")
+        played_notes =  self._get_unique_notes(clips)
+        note_list = list(played_notes)
+        if len(note_list) > 1:
+            print(note_list)
+            new_track = self._duplicate_track(track)
+            self._clear_notes(track, [note_list[0]]) #preserve only the first note on current track
+            self._clear_notes(new_track, note_list[1::]) # preseve all but the first note on new track
+            print("recursing into new track "+new_track.id)
+            self._process_midi_split(new_track) #repeat the process on new track
+        else:
+            print("This track is OK: "+str(len(note_list))+" note(s)")
+
     def split_drum_racks(self, drum_track_ids: list[str])-> None:
         if len(drum_track_ids) == 1 and drum_track_ids[0] == "all":
             track_ids = set()
@@ -1057,7 +1089,6 @@ class AbletonSet(object):
                 print("recursing into new track "+new_track.id)
                 self._process_drum_split(new_track)
   
-
     def _clear_ineffective_drum_notes(self, track: AbletonTrack):
         receivers = track.track_root.findall(".//DrumBranch/BranchInfo/ReceivingNote")
         received_notes = set[int]()
@@ -1069,18 +1100,25 @@ class AbletonSet(object):
                 return
             note = 128 - int(receiver.get("Value"))
             received_notes.add(note)
+        self._clear_notes(track, received_notes)  
+
+    def _clear_notes(self,track: AbletonTrack, notes_to_preserve: list[int]):
+        print("preseve:"+str(notes_to_preserve))
         clips = track.track_root.findall(".//MidiClip/Disabled[@Value='false']/..")
         for clip in clips:
-            midi_keys = clip.findall(".//MidiNoteEvent[@IsEnabled='true']../../MidiKey")
-            for key in midi_keys:
-                midi_note = int(key.get("Value"))
-                if not midi_note in received_notes:
-                    print("removing MIDI note " + str(midi_note))
-                    key_track = self.find_parent(clip, key, "KeyTrack")
-                    self.find_parent(clip, key_track).remove(key_track)
-            #TODO need to fix Ids of KeyTrack elements? 
+            self._clear_clip_notes(clip, notes_to_preserve)
+             
+    def _clear_clip_notes(self, clip: ET.Element, notes_to_preserve: list[int]):
+        midi_keys = clip.findall(".//MidiNoteEvent[@IsEnabled='true']../../MidiKey")
+        for key in midi_keys:
+            midi_note = int(key.get("Value"))
+            if not midi_note in notes_to_preserve:
+                print("removing MIDI note " + str(midi_note))
+                key_track = self.find_parent(clip, key, "KeyTrack")
+                self.find_parent(clip, key_track).remove(key_track)
+        #TODO need to fix Ids of KeyTrack elements?
 
-    def _build_loopup(self, root: ET.Element, element: ET.Element):
+    def _build_lookup(self, root: ET.Element, element: ET.Element):
         d = dict()
         for p in root.iter():
             for c in p:
@@ -1090,7 +1128,7 @@ class AbletonSet(object):
         raise ElementNotFound("Looks like the element is not in the tree of root")
 
     def find_parent(self, root: ET.Element, element: ET.Element, type: str = None):
-        d = self._build_loopup(root, element)
+        d = self._build_lookup(root, element)
         print("searching first parent of "+str(element)+" with type "+str(type))
         found = False
         candidate = element
