@@ -832,7 +832,6 @@ class AbletonSet(object):
         if len(drum_track_ids) == 1 and drum_track_ids[0] == "all":
             track_ids = set()
             for drums in self.root.findall(".//DrumGroupDevice"):
-                print(drums)
                 track_ids.add(self.find_parent(self.root, drums, "MidiTrack").get("Id"))
             self.trim_drum_racks(list(track_ids))
             return
@@ -870,7 +869,7 @@ class AbletonSet(object):
         if not track_found:
             logger.error("%sTrack %s was not found", R, drum_track_id)
         elif not removed_something:
-            logger.info("%sTrack %s has no unused chains", G, drum_track_id)
+            logger.info("%sTrack %s has no unused chains", C, drum_track_id)
     
     def _get_unused_drum_branches(self, drum_group: ET.Element, played_notes: set[int]) -> list[ET.Element]:
         """Find all DrumBranch elements (aka Drum Rack Chains) that are receiving notes other than the ones given."""
@@ -912,25 +911,24 @@ class AbletonSet(object):
             logger.error("%sTrack %s was not found or is not a MIDI track", R, midi_track_id)
 
     def _process_midi_split(self, track: AbletonTrack):
-        print ("/// MIDI split -- on track "+track.id+" "+track.name)
+        logger.debug("/// MIDI split -- on track "+track.id+" "+track.name)
         clips = track.track_root.findall("DeviceChain//MidiClip/Disabled[@Value='false']/..")
         played_notes =  self._get_unique_notes(clips)
         note_list = list(played_notes)
         if len(note_list) > 1:
-            print(note_list)
+            logger.debug(note_list)
             new_track = self._duplicate_track(track)
             self._clear_notes(track, [note_list[0]]) #preserve only the first note on current track
             self._clear_notes(new_track, note_list[1::]) # preseve all but the first note on new track
-            print("recursing into new track "+new_track.id)
+            logger.debug(f"recursing into new track {new_track.id}")
             self._process_midi_split(new_track) #repeat the process on new track
         else:
-            print("This track is OK: "+str(len(note_list))+" note(s)")
+            logger.debug(f"This track is OK: {len(note_list)} note(s)")
 
     def split_drum_racks(self, drum_track_ids: list[str])-> None:
         if len(drum_track_ids) == 1 and drum_track_ids[0] == "all":
             track_ids = set()
             for drums in self.root.findall(".//DrumGroupDevice"):
-                print(drums)
                 track_ids.add(self.find_parent(self.root, drums, "MidiTrack").get("Id"))
             self.split_drum_racks(list(track_ids))
             return
@@ -957,20 +955,21 @@ class AbletonSet(object):
         #     logger.info("%sTrack %s had no chains to extract", G, drum_track_id)
 
     def _process_drum_split(self, track: AbletonTrack):
-        print ("///----- on track "+track.id+" "+track.name)
+        logger.debug("///----- on track "+track.id+" "+track.name)
         drum_groups = track.track_root.findall("DeviceChain//DrumGroupDevice")
-        print (str(len(drum_groups))+" drum groups")
+        logger.debug(str(len(drum_groups))+" drum groups")
         if len(drum_groups) == 0:
             #delete track without any drum groups (expected to arrive here in recursion)
-            print("delte track without groups")
+            logger.debug("delete track without groups")
             self.find_parent(self.root, track.track_root).remove(track.track_root)
+            self.tracks.remove(track)
         elif len(drum_groups) > 0:
             drum_group = drum_groups[0]
             branch_container = drum_group.find("Branches")
             branches = branch_container.findall("DrumBranch")
             if len(branches) == 0:
                 # the group is empty, so we remove it and then start over again to get to the next group (if any)
-                print("first group is empty, deleting it and re-starting")
+                logger.debug("first group is empty, deleting it and re-starting")
                 self.find_parent(track.track_root, drum_group).remove(drum_group)
                 self._process_drum_split(track)
             elif len(branches) > 1:
@@ -978,12 +977,12 @@ class AbletonSet(object):
                 branch_name = branch.find("Name/UserName").get("Value")
                 if not branch_name:
                     branch_name = branch.find("Name/EffectiveName").get("Value")
-                print("branch " +branch_name)
+                logger.debug(f"branch {branch_name}")
                 branch.set("_copyHelper","1") 
                 new_track = self._duplicate_track(track)
                 branch.attrib.pop("_copyHelper") #will need this on the duplicated track only
 
-                print("relabeling this track to" + branch_name)
+                logger.debug(f"relabeling this track to {branch_name}")
                 track.name = branch_name
                 track.track_root.find("Name/UserName").set("Value", branch_name)
                 
@@ -993,48 +992,48 @@ class AbletonSet(object):
                 to_remove_from = self.find_parent(new_track_root, to_remove)
                 to_remove_from.remove(to_remove)
 
-                print("removing "+str(len(branches[1::]))+" remaining branches from track "+ track.id)
+                logger.debug(f"removing {len(branches[1::])} remaining branches from track {track.id}")
                 for branch in branches[1:]:
                     self.find_parent(track.track_root, branch).remove(branch)
 
-                print("removing "+str(len(drum_groups[1::]))+" remaining groups from track "+ track.id)
+                logger.debug(f"removing {len(drum_groups[1::])} remaining groups from track {track.id}")
                 for group in drum_groups[1::]:
                     self.find_parent(track.track_root, group).remove(group)
 
-                print("::cleaning up instrument rack chains")
+                logger.debug("::cleaning up instrument rack chains")
                 instr_group = self.find_parent(track.track_root, drum_group, "InstrumentGroupDevice")
                 if instr_group is not None:
-                    print("instrument rack found " + instr_group.tag +" " + instr_group.get("Id"))
+                    logger.debug(f"instrument rack found {instr_group.tag} {instr_group.get('Id')}")
                     #now, remove all intrunment chains that contain drum racks (except the one)
                     instr_branch_container = instr_group.find("Branches")
                     instr_branches = instr_branch_container.findall("InstrumentBranch")
-                    print("instrument rack contains "+str(len(instr_branches))+" branches")
+                    logger.debug(f"instrument rack contains {len(instr_branches)} branches")
                     for instr_branch in instr_branches:
                         devices = instr_branch.findall("DeviceChain//Devices/*")
                         # TODO there could be devices like EQ left which make no sense if the drums are gone
                         # and we can be pretty sure that there was no other midi-to-audio device here, right?
                         if len(devices) == 0: #devices is empty
-                            print("__________ removing empty instrument branch "+instr_branch.get("Id"))
+                            logger.debug(f"__________ removing empty instrument branch {instr_branch.get('Id')}")
                             instr_branch_container.remove(instr_branch)
                         else:
-                            print("instrument chain "+instr_branch.get("Id")+" kept due to "+str(len(devices))+" devices:")
-                            print("    "+str(devices))
+                            logger.debug(f"instrument chain {instr_branch.get('Id')} kept due to {len(devices)} devices:")
+                            logger.debug(f"    {devices}")
                 else:
-                    print("No instrument rack found")
+                    logger.debug("No instrument rack found")
 
 
                 self._clear_ineffective_drum_notes(track)
-                print("recursing into new track "+new_track.id)
+                logger.debug(f"recursing into new track {new_track.id}")
                 self._process_drum_split(new_track)
             else:
                 #only one chain
-                print("---- reached single-chain group")
+                logger.debug("---- reached single-chain group")
                 branch = branches[0]
                 branch_name = branch.find("Name/UserName").get("Value")
                 if not branch_name:
                     branch_name = branch.find("Name/EffectiveName").get("Value")
                 
-                print("relabeling to "+branch_name)
+                logger.debug(f"relabeling to {branch_name}")
                 track.name = branch_name
                 track.track_root.find("Name/UserName").set("Value", branch_name)
 
@@ -1048,13 +1047,13 @@ class AbletonSet(object):
                 to_remove_from = self.find_parent(new_track_root, to_remove)
                 to_remove_from.remove(to_remove)
 
-                print("removing "+str(len(drum_groups[1::]))+" remaining groups from track "+ track.id)
+                logger.debug(f"removing {len(drum_groups[1::])} remaining groups from track {track.id}")
                 for group in drum_groups[1::]:
                     self.find_parent(track.track_root, group).remove(group)
 
                 self._clear_ineffective_drum_notes(track)
 
-                print("::cleaning up instrument rack chains")
+                logger.debug("::cleaning up instrument rack chains")
                 drum_group.set("_lookupHelper","1")
                 is_in_instr_group = track.track_root.find("DeviceChain/DeviceChain/Devices//InstrumentGroupDevice//DrumGroupDevice[@_lookupHelper='1']")
                 drum_group.attrib.pop("_lookupHelper","1")
@@ -1067,26 +1066,26 @@ class AbletonSet(object):
                         if parent.tag == "InstrumentGroupDevice":
                             found_instr_group = True
                             #we have found the intrument rack
-                            print("instrument rack found " + parent.tag +" " + parent.get("Id"))
+                            logger.debug(f"instrument rack found {parent.tag}  {parent.get('Id')}")
                             #now, remove all intrunment chains that contain drum racks (except the one)
                             instr_branch_container = parent.find("Branches")
                             instr_branches = instr_branch_container.findall("InstrumentBranch")
-                            print("instrument rack contains "+str(len(instr_branches))+" branches")
+                            logger.debug(f"instrument rack contains {len(instr_branches)} branches")
                             for instr_branch in instr_branches:
                                 devices = instr_branch.findall("DeviceChain//Devices/*")
                                 # TODO there could be devices like EQ left which make no sense if the drums are gone
                                 # and we can be pretty sure that there was no other midi-to-audio device here, right?
                                 if len(devices) == 0: #devices is empty
-                                    print("__________ removing empty instrument branch "+instr_branch.get("Id"))
+                                    logger.debug(f"__________ removing empty instrument branch {instr_branch.get('Id')}")
                                     instr_branch_container.remove(instr_branch)
                                 else:
-                                    print("instrument chain "+instr_branch.get("Id")+" kept due to "+str(len(devices))+" devices:")
-                                    print("    "+str(devices))
+                                    logger.debug(f"instrument chain {instr_branch.get('Id')} kept due to {len(devices)} devices:")
+                                    logger.debug(f"    {devices}")
                             break #stop walking up
                     if not found_instr_group:
-                        print("No instrument rack found")
+                        logger.debug("No instrument rack found")
 
-                print("recursing into new track "+new_track.id)
+                logger.debug(f"recursing into new track {new_track.id}")
                 self._process_drum_split(new_track)
   
     def _clear_ineffective_drum_notes(self, track: AbletonTrack):
@@ -1096,14 +1095,14 @@ class AbletonSet(object):
             note = 128 - int(receiver.get("Value"))
             #note 128 is "All"
             if note == 128:
-                print("there's a chain receiving all notes, clearing notes in clips makes no sense")
+                logger.debug("there's a chain receiving all notes, clearing notes in clips makes no sense")
                 return
             note = 128 - int(receiver.get("Value"))
             received_notes.add(note)
         self._clear_notes(track, received_notes)  
 
     def _clear_notes(self,track: AbletonTrack, notes_to_preserve: list[int]):
-        print("preseve:"+str(notes_to_preserve))
+        logger.debug(f"preseve: {notes_to_preserve}")
         clips = track.track_root.findall(".//MidiClip/Disabled[@Value='false']/..")
         for clip in clips:
             self._clear_clip_notes(clip, notes_to_preserve)
@@ -1113,27 +1112,27 @@ class AbletonSet(object):
         for key in midi_keys:
             midi_note = int(key.get("Value"))
             if not midi_note in notes_to_preserve:
-                print("removing MIDI note " + str(midi_note))
+                logger.debug(f"removing MIDI note {midi_note}")
                 key_track = self.find_parent(clip, key, "KeyTrack")
                 self.find_parent(clip, key_track).remove(key_track)
         #TODO need to fix Ids of KeyTrack elements?
 
     def _build_lookup(self, root: ET.Element, element: ET.Element):
-        d = dict()
+        index = dict()
         for p in root.iter():
             for c in p:
-                d[c]=p
+                index[c]=p
                 if c == element:
-                    return d
-        raise ElementNotFound("Looks like the element is not in the tree of root")
+                    return index
+        raise ElementNotFound(f"Looks like the element {element} is not in the tree of root {root}")
 
     def find_parent(self, root: ET.Element, element: ET.Element, type: str = None):
-        d = self._build_lookup(root, element)
-        print("searching first parent of "+str(element)+" with type "+str(type))
+        index = self._build_lookup(root, element)
+        logger.debug(f"searching first parent of {element}  with type {'Any' if  type == None else type}")
         found = False
         candidate = element
         while candidate != root:
-            candidate = d[candidate]
+            candidate = index[candidate]
             if type == None or candidate.tag == type:
                 return candidate
         return None
@@ -1192,7 +1191,7 @@ class AbletonSet(object):
     def _duplicate_track(self, track: AbletonTrack) -> AbletonTrack:
         
         new_track_id = self._get_max_track_id() + 1
-        print ("duplicating track "+track.id+" to track "+str(new_track_id))
+        logger.debug(f"duplicating track {track.id} to track {new_track_id}")
         
         new_track_element = copy.deepcopy(track.track_root)
         new_track_element.set("Id", str(new_track_id))
@@ -1246,3 +1245,53 @@ class AbletonSet(object):
             logger.info("%sMaster track info text: %s%s",C, G, info_text)
         else:
             logger.info("%sMaster track has no info text.",Y)
+    
+    def sort_by_arrangement(self):
+        logger.info("%sSorting tracks by arrangement clip start time", C)
+        track_starts = {}
+        tracks_by_id = {}
+        group_tracks = {}
+        for track in self.tracks:
+            if track.type == "ReturnTrack":
+               continue
+            if track.type == "GroupTrack":
+                group_tracks[track.id] = track
+                continue
+            tracks_by_id[track.id] = track
+            arrangement_clips = track.track_root.findall(".//ClipTimeable/ArrangerAutomation/Events/MidiClip")
+            earliest_start = float('inf')
+            for clip in arrangement_clips:
+                earliest_start = min(earliest_start, int(clip.get("Time")))
+            track_starts[track.id] = earliest_start
+        
+        order = reversed(sorted(track_starts.items(), key=lambda x : float('inf') if x[1] == -1 else x[1]))
+        track_container = self.root.find("LiveSet/Tracks")
+        last_group_id = None
+
+        for (track_id, _) in order:
+            track = tracks_by_id[track_id]
+            
+            if track.group_id != "-1" and track.group_id in group_tracks.keys():
+                if track.group_id is not None and last_group_id != last_group_id:
+                    # insert the previous group before it's tracks when we reach the next group
+                    group_track = group_tracks.pop(last_group_id)
+                    track_container.remove(group_track.track_root)
+                    track_container.insert(0, group_track.track_root)
+                    self.tracks.remove(group_track)
+                    self.tracks.insert(0, group_track)
+
+                last_group_id = track.group_id
+                
+            track_container.remove(track.track_root)
+            track_container.insert(0, track.track_root)
+            self.tracks.remove(track)
+            self.tracks.insert(0, track)
+        
+        if last_group_id is not None:
+            # handle remaining group
+            group_track = group_tracks.pop(last_group_id)
+            track_container.remove(group_track.track_root)
+            track_container.insert(0, group_track.track_root)
+            self.tracks.remove(group_track)
+            self.tracks.insert(0, group_track)
+

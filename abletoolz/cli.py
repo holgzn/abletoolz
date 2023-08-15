@@ -199,7 +199,8 @@ def parse_arguments() -> argparse.Namespace:
         "--split-drum-rack",
         metavar="TRACK_ID",
         nargs="+",
-        help="Split the drum chains of the drum rack on the given track into multiple new tracks, preserving sends on the track and the drum rack itself. Using 'all' as argument will apply to all tracks with drum racks. If combined with drum rack trimming, the trimming is done first.",
+        help="Split the drum chains of the drum rack on the given track into multiple new tracks, preserving sends on the track and the drum rack itself. "
+        "Using 'all' as argument will apply to all tracks with drum racks. If combined with drum rack trimming, the trimming is done first.",
     )
     parser.add_argument(
         "--split-midi-track",
@@ -244,7 +245,15 @@ def parse_arguments() -> argparse.Namespace:
         help="TEST",
     )
 
+    parser.add_argument(
+        "--sort-by-arrangement",
+        action="store_true",
+        default=False,
+        help="Sort tracks by earliest clips in arrangement",
+    )
+
     args = parser.parse_args()
+    print(args)
     assert not (
         args.fix_samples_absolute and args.fix_samples_collect
     ), "Can only use --fix-samples-collect or --fix-samples-absolute, not both!"
@@ -274,7 +283,8 @@ def parse_arguments() -> argparse.Namespace:
                 args.xml,
                 args.trim_drum_rack,
                 args.split_drum_rack,
-                args.split_midi_track
+                args.split_midi_track,
+                args.sort_by_arrangement
             ]
         )
     ), "--db/--database cannot be used with other commands!"
@@ -299,20 +309,8 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         ableton_set.set_audio_output(args.master_out, element_string="MasterTrack")
     if args.cue_out:
         ableton_set.set_audio_output(args.cue_out, element_string="PreHearTrack")
-    if args.fold:
-        ableton_set.fold_tracks()
-    elif args.unfold:
-        ableton_set.unfold_tracks()
-    if args.set_track_heights:
-        ableton_set.set_track_heights(args.set_track_heights)
-    if args.set_track_widths:
-        ableton_set.set_track_widths(args.set_track_widths)
-    if args.gradient_tracks:
-        ableton_set.gradient_tracks()
-    if args.number_tracks:
-        ableton_set.load_tracks()
-        ableton_set.number_tracks()
-
+    
+    
     if args.trim_drum_rack:
         ableton_set.load_tracks()
         ableton_set.trim_drum_racks(args.trim_drum_rack)
@@ -324,6 +322,15 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
     if args.split_midi_track:
         ableton_set.load_tracks()
         ableton_set.split_midi_tracks(args.split_midi_track)
+
+    if args.fold:
+        ableton_set.fold_tracks()
+    elif args.unfold:
+        ableton_set.unfold_tracks()
+    if args.set_track_heights:
+        ableton_set.set_track_heights(args.set_track_heights)
+    if args.set_track_widths:
+        ableton_set.set_track_widths(args.set_track_widths)
 
     if args.check_samples:
         ableton_set.list_samples()
@@ -342,6 +349,17 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
     if args.test:
         ableton_set.load_tracks()
         ableton_set.test();
+
+    if args.sort_by_arrangement:
+        ableton_set.load_tracks()
+        ableton_set.sort_by_arrangement();
+
+    if args.gradient_tracks:
+        ableton_set.gradient_tracks()
+
+    if args.number_tracks:
+        ableton_set.load_tracks()
+        ableton_set.number_tracks()
 
     if args.list_tracks:
         ableton_set.load_tracks()
@@ -372,7 +390,8 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
             args.unfold,
             args.trim_drum_rack,
             args.split_drum_rack,
-            args.split_midi_track
+            args.split_midi_track,
+            args.sort_by_arrangement
         ]
     ):
         logger.info("%sNo changes saved, use -s/--save option to write changes to file.", Y)
