@@ -1247,6 +1247,7 @@ class AbletonSet(object):
             logger.info("%sMaster track has no info text.",Y)
     
     def sort_by_arrangement(self):
+        """Sort tracks by their earliest arrangement clip start time"""
         logger.info("%sSorting tracks by arrangement clip start time", C)
         track_starts = {}
         tracks_by_id = {}

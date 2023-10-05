@@ -124,7 +124,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--append-name",
         metavar="VALUE",
-        help="Append someting to the file name when saving",
+        help="Append something to the file name when saving",
     )
     parser.add_argument(
         "--prepend-version",
