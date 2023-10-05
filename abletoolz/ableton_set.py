@@ -1250,12 +1250,13 @@ class AbletonSet(object):
         logger.info("%sSorting tracks by arrangement clip start time", C)
         track_starts = {}
         tracks_by_id = {}
-        group_tracks = {}
+        group_tracks = []
         for track in self.tracks:
             if track.type == "ReturnTrack":
                continue
             if track.type == "GroupTrack":
-                group_tracks[track.id] = track
+                tracks_by_id[track.id] = track
+                group_tracks.append(track.id)
                 continue
             tracks_by_id[track.id] = track
             arrangement_clips = track.track_root.findall(".//ClipTimeable/ArrangerAutomation/Events/MidiClip")
@@ -1263,35 +1264,26 @@ class AbletonSet(object):
             for clip in arrangement_clips:
                 earliest_start = min(earliest_start, int(clip.get("Time")))
             track_starts[track.id] = earliest_start
-        
-        order = reversed(sorted(track_starts.items(), key=lambda x : float('inf') if x[1] == -1 else x[1]))
+
+            if track.group_id != "-1":
+                group_start = track_starts.get(track.group_id)
+                if group_start is None:
+                    group_start = float('inf')
+                group_start = min(group_start, earliest_start)
+                track_starts[track.group_id] = group_start
+
+        # order from last to first ocurrence so we can work backwards and always push tracks to the front with insert(0, track)
+        # inner sort will bring group tracks to the front so that the group's tracks will be after the group track when sorted by start time
+        order = reversed(sorted(sorted(track_starts.items(), key=lambda x : float('inf') if x[1] == -1 else x[1]),key=lambda x : 0 if x[0] in group_tracks else 1))
+
         track_container = self.root.find("LiveSet/Tracks")
         last_group_id = None
 
         for (track_id, _) in order:
             track = tracks_by_id[track_id]
-            
-            if track.group_id != "-1" and track.group_id in group_tracks.keys():
-                if track.group_id is not None and last_group_id != last_group_id:
-                    # insert the previous group before it's tracks when we reach the next group
-                    group_track = group_tracks.pop(last_group_id)
-                    track_container.remove(group_track.track_root)
-                    track_container.insert(0, group_track.track_root)
-                    self.tracks.remove(group_track)
-                    self.tracks.insert(0, group_track)
-
-                last_group_id = track.group_id
-                
             track_container.remove(track.track_root)
             track_container.insert(0, track.track_root)
             self.tracks.remove(track)
             self.tracks.insert(0, track)
         
-        if last_group_id is not None:
-            # handle remaining group
-            group_track = group_tracks.pop(last_group_id)
-            track_container.remove(group_track.track_root)
-            track_container.insert(0, group_track.track_root)
-            self.tracks.remove(group_track)
-            self.tracks.insert(0, group_track)
 
