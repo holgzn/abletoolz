@@ -1286,5 +1286,53 @@ class AbletonSet(object):
             track_container.insert(0, track.track_root)
             self.tracks.remove(track)
             self.tracks.insert(0, track)
+
+    def sort_by_arrangement_inside_groups(self):
+        # TODO only sort tracks inside groups but preserve order of groups
+        #all tracks with group ID only
+        # process each group separately
+        # insert position depdens on position of group
+        tracks_by_group = {}
+        tracks_by_id = {}
+        for track in self.tracks:
+            if track.type == "ReturnTrack":
+               continue
+            if track.type == "GroupTrack":
+                tracks_by_id[track.id] = track
+                continue
+            tracks_by_id[track.id] = track
+            if track.group_id != "-1":
+                list = tracks_by_group.get(track.group_id)
+                if list is None:
+                    list = []
+                    tracks_by_group[track.group_id]  = list
+                list.append(track)
+
+                
+
+        
+        print(tracks_by_group)
+        
+        for group_id in tracks_by_group:
+            tracks = tracks_by_group[group_id]
+            track_starts = {}
+            group_position = None
+            for track in tracks:
+                arrangement_clips = track.track_root.findall(".//ClipTimeable/ArrangerAutomation/Events/MidiClip")
+                earliest_start = float('inf')
+                for clip in arrangement_clips:
+                    earliest_start = min(earliest_start, int(clip.get("Time")))
+                track_starts[track.id] = earliest_start
+                order = reversed(sorted(track_starts.items(), key=lambda x : float('inf') if x[1] == -1 else x[1]))
+                
+
+
+
+    def sort_by_arrangement_groups_only(self):
+        # TODO only sort group tracks 
+        print("TODO")
+        # like the original method
+        # but only change position of groups
+        # -> what about position of single tracks? does this imply "groups to the front"?
         
 

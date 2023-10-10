@@ -252,6 +252,13 @@ def parse_arguments() -> argparse.Namespace:
         help="Sort tracks by earliest clips in arrangement",
     )
 
+    parser.add_argument(
+        "--sort-by-arrangement-in-groups",
+        action="store_true",
+        default=False,
+        help="Sort tracks by earliest clips in arrangement",
+    )
+
     args = parser.parse_args()
     print(args)
     assert not (
@@ -284,7 +291,8 @@ def parse_arguments() -> argparse.Namespace:
                 args.trim_drum_rack,
                 args.split_drum_rack,
                 args.split_midi_track,
-                args.sort_by_arrangement
+                args.sort_by_arrangement,
+                args.sort_by_arrangement_in_groups,
             ]
         )
     ), "--db/--database cannot be used with other commands!"
@@ -353,6 +361,10 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
     if args.sort_by_arrangement:
         ableton_set.load_tracks()
         ableton_set.sort_by_arrangement();
+
+    if args.sort_by_arrangement_in_groups:
+        ableton_set.load_tracks()
+        ableton_set.sort_by_arrangement_inside_groups();
 
     if args.gradient_tracks:
         ableton_set.gradient_tracks()
