@@ -3,11 +3,11 @@ requires = ["setuptools", "wheel"]
 
 [project]
 name = "abletoolz"
-version = "1.1.1"
+version = "1.1.2"
 requires-python = ">=3.10"
 description = "Tools made for editing, fixing and analyzing Ableton Live sets."
 authors = [
-    {name = "ElixirBeats"},
+    {name = "ElixirBeats"}, {name = "Holgzn"}
 ]
 readme = "README.md"
 license = { file = "LICENSE" }
