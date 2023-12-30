@@ -16,7 +16,7 @@ from xml.etree import ElementTree as ET
 
 from abletoolz import color_tools, utils
 from abletoolz.ableton_track import AbletonTrack
-from abletoolz.misc import CB, RB, RST, STEREO_OUTPUTS, B, C, G, M, R, Y, get_element, ElementNotFound
+from abletoolz.misc import CB, RB, RST, STEREO_OUTPUTS, B, C, G, M, R, Y, get_element, ElementNotFound, find_parent
 
 if sys.platform == "win32":
     import win32_setctime
@@ -476,7 +476,7 @@ class AbletonSet(object):
             return None
         else:
 
-            # TODO match from sqlite db?
+            # TODO match from sqlite db? (~/Library/Application\ Support/Ableton/Live\ Database )
             vst3_plugins = list(pathlib.Path("/Library/Audio/Plug-Ins/VST3").rglob("*.vst3/Contents/Info.plist")) # TODO: ~/Library and custom folder + list(pathlib.Path("/Library/Audio/Plugins/VST3").rglob("*.vst3"))
             for vst3 in vst3_plugins:
                 #print(vst3)
@@ -832,7 +832,7 @@ class AbletonSet(object):
         if len(drum_track_ids) == 1 and drum_track_ids[0] == "all":
             track_ids = set()
             for drums in self.root.findall(".//DrumGroupDevice"):
-                track_ids.add(self.find_parent(self.root, drums, "MidiTrack").get("Id"))
+                track_ids.add(find_parent(self.root, drums, "MidiTrack").get("Id"))
             self.trim_drum_racks(list(track_ids))
             return
         for id in drum_track_ids:
@@ -929,7 +929,7 @@ class AbletonSet(object):
         if len(drum_track_ids) == 1 and drum_track_ids[0] == "all":
             track_ids = set()
             for drums in self.root.findall(".//DrumGroupDevice"):
-                track_ids.add(self.find_parent(self.root, drums, "MidiTrack").get("Id"))
+                track_ids.add(find_parent(self.root, drums, "MidiTrack").get("Id"))
             self.split_drum_racks(list(track_ids))
             return
         for id in drum_track_ids:
@@ -937,8 +937,6 @@ class AbletonSet(object):
 
     def _split_drum_rack(self, drum_track_id: str)-> None:
         track_found = False
-        splitted_something = False
-        processed_groups = 0
         for track in self.tracks:
             if track.id == drum_track_id:
                 track_found = True
@@ -951,8 +949,6 @@ class AbletonSet(object):
                 break #track was found
         if not track_found:
             logger.error("%sTrack %s was not found", R, drum_track_id)
-        # elif not splitted_something:
-        #     logger.info("%sTrack %s had no chains to extract", G, drum_track_id)
 
     def _process_drum_split(self, track: AbletonTrack):
         logger.debug("///----- on track "+track.id+" "+track.name)
@@ -961,7 +957,7 @@ class AbletonSet(object):
         if len(drum_groups) == 0:
             #delete track without any drum groups (expected to arrive here in recursion)
             logger.debug("delete track without groups")
-            self.find_parent(self.root, track.track_root).remove(track.track_root)
+            find_parent(self.root, track.track_root).remove(track.track_root)
             self.tracks.remove(track)
         elif len(drum_groups) > 0:
             drum_group = drum_groups[0]
@@ -970,7 +966,7 @@ class AbletonSet(object):
             if len(branches) == 0:
                 # the group is empty, so we remove it and then start over again to get to the next group (if any)
                 logger.debug("first group is empty, deleting it and re-starting")
-                self.find_parent(track.track_root, drum_group).remove(drum_group)
+                find_parent(track.track_root, drum_group).remove(drum_group)
                 self._process_drum_split(track)
             elif len(branches) > 1:
                 branch = branches[0]
@@ -989,19 +985,19 @@ class AbletonSet(object):
                 new_track_root = new_track.track_root
                 
                 to_remove = new_track_root.find(f"DeviceChain//DrumBranch[@_copyHelper='1']")
-                to_remove_from = self.find_parent(new_track_root, to_remove)
+                to_remove_from = find_parent(new_track_root, to_remove)
                 to_remove_from.remove(to_remove)
 
                 logger.debug(f"removing {len(branches[1::])} remaining branches from track {track.id}")
                 for branch in branches[1:]:
-                    self.find_parent(track.track_root, branch).remove(branch)
+                    find_parent(track.track_root, branch).remove(branch)
 
                 logger.debug(f"removing {len(drum_groups[1::])} remaining groups from track {track.id}")
                 for group in drum_groups[1::]:
-                    self.find_parent(track.track_root, group).remove(group)
+                    find_parent(track.track_root, group).remove(group)
 
                 logger.debug("::cleaning up instrument rack chains")
-                instr_group = self.find_parent(track.track_root, drum_group, "InstrumentGroupDevice")
+                instr_group = find_parent(track.track_root, drum_group, "InstrumentGroupDevice")
                 if instr_group is not None:
                     logger.debug(f"instrument rack found {instr_group.tag} {instr_group.get('Id')}")
                     #now, remove all intrunment chains that contain drum racks (except the one)
@@ -1044,12 +1040,12 @@ class AbletonSet(object):
                 new_track_root = new_track.track_root
             
                 to_remove = new_track_root.find(f"DeviceChain//DrumGroupDevice[@_copyHelper='HELLO']")
-                to_remove_from = self.find_parent(new_track_root, to_remove)
+                to_remove_from = find_parent(new_track_root, to_remove)
                 to_remove_from.remove(to_remove)
 
                 logger.debug(f"removing {len(drum_groups[1::])} remaining groups from track {track.id}")
                 for group in drum_groups[1::]:
-                    self.find_parent(track.track_root, group).remove(group)
+                    find_parent(track.track_root, group).remove(group)
 
                 self._clear_ineffective_drum_notes(track)
 
@@ -1062,7 +1058,7 @@ class AbletonSet(object):
                     parent = drum_group
                     found_instr_group = False
                     while parent.tag != "MidiTrack":
-                        parent = self.find_parent(track.track_root, parent)
+                        parent = find_parent(track.track_root, parent)
                         if parent.tag == "InstrumentGroupDevice":
                             found_instr_group = True
                             #we have found the intrument rack
@@ -1113,42 +1109,20 @@ class AbletonSet(object):
             midi_note = int(key.get("Value"))
             if not midi_note in notes_to_preserve:
                 logger.debug(f"removing MIDI note {midi_note}")
-                key_track = self.find_parent(clip, key, "KeyTrack")
-                self.find_parent(clip, key_track).remove(key_track)
+                key_track = find_parent(clip, key, "KeyTrack")
+                find_parent(clip, key_track).remove(key_track)
         #TODO need to fix Ids of KeyTrack elements?
-
-    def _build_lookup(self, root: ET.Element, element: ET.Element):
-        index = dict()
-        for p in root.iter():
-            for c in p:
-                index[c]=p
-                if c == element:
-                    return index
-        raise ElementNotFound(f"Looks like the element {element} is not in the tree of root {root}")
-
-    def find_parent(self, root: ET.Element, element: ET.Element, type: str = None):
-        index = self._build_lookup(root, element)
-        logger.debug(f"searching first parent of {element}  with type {'Any' if  type == None else type}")
-        found = False
-        candidate = element
-        while candidate != root:
-            candidate = index[candidate]
-            if type == None or candidate.tag == type:
-                return candidate
-        return None
-    
-        
 
     def test(self):
         #pointee_element = self.root.find("LiveSet/NextPointeeId")
         #pointee_element.set("Value", "1")
         #self._fixPointees(self.tracks[0])
-        self._duplicate_track(self.tracks[0])
+        #self._duplicate_track(self.tracks[0])
+        print("TEST")
 
     def _fixPointees(self, track: AbletonTrack):
         pointee_element = self.root.find("LiveSet/NextPointeeId")
         next_pointee_id = int(pointee_element.get("Value"))
-        #print(next_pointee_id)
         new_track_element = track.track_root
 
         pointees = new_track_element.findall(".//Pointee") \
@@ -1161,11 +1135,7 @@ class AbletonSet(object):
             + new_track_element.findall(".//VolumeModulationTarget") \
             + new_track_element.findall(".//MidiControllers")
 
-        #print(str(len(pointees))+" pointees in new track")
         for p in pointees:
-            #print(p.tag)
-            # if p.tag == "PointeeId":
-            #     p.set("Value", str(next_pointee_id))
             if p.tag == "MidiControllers":
                 for e in p:
                     if e.tag.startswith("ControllerTargets."):
@@ -1175,11 +1145,9 @@ class AbletonSet(object):
             else:
                 new_id = str(next_pointee_id)
                 self._fixSinglePointee(new_track_element, p, new_id)
-
             next_pointee_id += 1
-            # print(next_pointee_id)
-        
         pointee_element.set("Value", str(next_pointee_id))
+
 
     def _fixSinglePointee(self, new_track_element,  e, new_id):
         old_id = e.get("Id")
@@ -1224,17 +1192,19 @@ class AbletonSet(object):
         return max_id
 
     def number_tracks(self):
-        """Ensure all tracks will show sequence a number in their name. Will set the UserName to start with '#-'"""
+        """Ensure all tracks will show a sequence number in their name. Will set the UserName to start with '#-'. Tracks that start with '_' are ignored."""
         for track in self.tracks:
             if track.type == "ReturnTrack":
                 continue
             user_name_element = track.track_root.find("Name/UserName")
             user_name = user_name_element.get("Value")
-            if not user_name.startswith("#"):
+            if not user_name.startswith("#") and not user_name.startswith("_"):
                 base_name = user_name
                 if not base_name:
                     base_name = track.track_root.find("Name/EffectiveName").get("Value")
-                base_name = re.sub("^[0-9]- *", "", base_name)
+                new_base_name = re.sub("^[0-9]+-? *", "", base_name)
+                print(base_name+" ->" + new_base_name)
+                base_name = new_base_name
                 new_name =f"#-{base_name}"
                 user_name_element.set("Value", new_name)
                 track.name =  new_name
@@ -1251,13 +1221,11 @@ class AbletonSet(object):
         logger.info("%sSorting tracks by arrangement clip start time", C)
         track_starts = {}
         tracks_by_id = {}
-        group_tracks = []
         for track in self.tracks:
             if track.type == "ReturnTrack":
                continue
             if track.type == "GroupTrack":
                 tracks_by_id[track.id] = track
-                group_tracks.append(track.id)
                 continue
             tracks_by_id[track.id] = track
             arrangement_clips = track.track_root.findall(".//ClipTimeable/ArrangerAutomation/Events/MidiClip")
@@ -1274,65 +1242,53 @@ class AbletonSet(object):
                 track_starts[track.group_id] = group_start
 
         # order from last to first ocurrence so we can work backwards and always push tracks to the front with insert(0, track)
-        # inner sort will bring group tracks to the front so that the group's tracks will be after the group track when sorted by start time
-        order = reversed(sorted(sorted(track_starts.items(), key=lambda x : float('inf') if x[1] == -1 else x[1]),key=lambda x : 0 if x[0] in group_tracks else 1))
+        order = reversed(sorted(track_starts.items(), key=lambda x : float('inf') if x[1] == -1 else x[1]))
 
-        track_container = self.root.find("LiveSet/Tracks")
-        last_group_id = None
-
+        # apply order by time to all tracks
         for (track_id, _) in order:
             track = tracks_by_id[track_id]
-            track_container.remove(track.track_root)
-            track_container.insert(0, track.track_root)
             self.tracks.remove(track)
             self.tracks.insert(0, track)
 
-    def sort_by_arrangement_inside_groups(self):
-        # TODO only sort tracks inside groups but preserve order of groups
-        #all tracks with group ID only
-        # process each group separately
-        # insert position depdens on position of group
-        tracks_by_group = {}
-        tracks_by_id = {}
+        # pull tracks into their groups again
+        new_order = []
+        groups={}
         for track in self.tracks:
-            if track.type == "ReturnTrack":
-               continue
+            x = None
             if track.type == "GroupTrack":
-                tracks_by_id[track.id] = track
-                continue
-            tracks_by_id[track.id] = track
-            if track.group_id != "-1":
-                list = tracks_by_group.get(track.group_id)
-                if list is None:
-                    list = []
-                    tracks_by_group[track.group_id]  = list
-                list.append(track)
+                x = {"type": "group", "track": track, "children":[]}
+                groups[track.id]=x
+                if track.group_id != "-1":
+                    groups[track.group_id]["children"].append(x)
+                else:
+                    new_order.append(x)
+            else:
+                x = {"type": "track", "track": track}
+                if track.group_id != "-1":
+                    groups[track.group_id]["children"].append(x)
+                else:
+                    new_order.append(x)
 
-                
+        new_list = []
+        for z in new_order:
+            self._append_recursive(new_list, z)
 
+        track_container = self.root.find("LiveSet/Tracks")
+        self.tracks = new_list
+
+        #finally apply the order to XML elements
+        for t in reversed(self.tracks):
+            track_container.remove(t.track_root)
+            track_container.insert(0, t.track_root)
         
-        print(tracks_by_group)
         
-        for group_id in tracks_by_group:
-            tracks = tracks_by_group[group_id]
-            track_starts = {}
-            group_position = None
-            for track in tracks:
-                arrangement_clips = track.track_root.findall(".//ClipTimeable/ArrangerAutomation/Events/MidiClip")
-                earliest_start = float('inf')
-                for clip in arrangement_clips:
-                    earliest_start = min(earliest_start, int(clip.get("Time")))
-                track_starts[track.id] = earliest_start
-                order = reversed(sorted(track_starts.items(), key=lambda x : float('inf') if x[1] == -1 else x[1]))
-                
+    def _append_recursive(self, tolist: list[AbletonTrack], t: dict):
+        tolist.append(t["track"])
+        if t["type"] == "group":
+            for c in t["children"]:
+                self._append_recursive(tolist, c)
+
+ 
 
 
-
-    def sort_by_arrangement_groups_only(self):
-        # TODO only sort group tracks 
-        print("TODO")
-        # like the original method
-        # but only change position of groups
-        # -> what about position of single tracks? does this imply "groups to the front"?
-        
 

@@ -139,3 +139,24 @@ def note_translator(midi_note_number: int) -> Tuple[str, int]:
     octave = midi_note_number // 12 - 1
     note_index = midi_note_number % 12
     return notes[note_index], octave
+
+
+def find_parent(root: ET.Element, element: ET.Element, type: str = None):
+        index = _build_lookup(root, element)
+        #logger.debug(f"searching first parent of {element}  with type {'Any' if  type == None else type}")
+        found = False
+        candidate = element
+        while candidate != root:
+            candidate = index[candidate]
+            if type == None or candidate.tag == type:
+                return candidate
+        return None
+
+def _build_lookup(self, root: ET.Element, element: ET.Element):
+        index = dict()
+        for p in root.iter():
+            for c in p:
+                index[c]=p
+                if c == element:
+                    return index
+        raise ElementNotFound(f"Looks like the element {element} is not in the tree of root {root}")
