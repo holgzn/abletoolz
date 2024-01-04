@@ -477,9 +477,9 @@ class AbletonSet(object):
         else:
 
             # TODO match from sqlite db? (~/Library/Application\ Support/Ableton/Live\ Database )
-            vst3_plugins = list(pathlib.Path("/Library/Audio/Plug-Ins/VST3").rglob("*.vst3/Contents/Info.plist")) # TODO: ~/Library and custom folder + list(pathlib.Path("/Library/Audio/Plugins/VST3").rglob("*.vst3"))
+            # TODO: custom folder plugin folder
+            vst3_plugins = list(pathlib.Path("/Library/Audio/Plug-Ins/VST3").rglob("*.vst3/Contents/Info.plist")) + list(pathlib.Home() + pathlib.Path("/Library/Audio/Plug-Ins/VST3").rglob("*.vst3/Contents/Info.plist"))
             for vst3 in vst3_plugins:
-                #print(vst3)
                 with open(vst3, 'rb') as file:
                     pl = plistlib.load(file)
                     if "CFBundleDisplayName" in pl:
@@ -490,7 +490,6 @@ class AbletonSet(object):
                             return vst3.parent.parent
                     if "AudioComponents" in pl:
                         if pl["AudioComponents"][0]["name"] == plugin_name: #TODO: more than one component?
-                            print("using AudioComponents[0]")
                             return vst3.parent.parent
                     elif plugin_name + ".vst3" == vst3.parent.parent.name:
                         return vst3.parent.parent
@@ -546,7 +545,6 @@ class AbletonSet(object):
         # TODO consider to log existing plugins as debug and only report missing ones by default as it is with the samples
         for plugin_element in self.root.iter("PluginDesc"):
             self.last_elem = plugin_element
-            #print(ET.tostring(plugin_element))
             for vst_element in plugin_element.iter("VstPluginInfo"):
                 full_path, name, potential = self.parse_vst_element(vst_element)
                 exists = True if full_path and full_path.exists() else False
@@ -580,8 +578,6 @@ class AbletonSet(object):
                 #manufacturer = "TODO: read from sqlite?" # get_element(plugin_element, "AuPluginInfo.Manufacturer", attribute="Value")
                 exists = True if full_path and full_path.exists() else False
                 color = G if exists else R
-                #if potential and color == R:
-                #    color = Y
                 logger.info(
                     "%sPlugin: %s, %sPlugin folder path: %s, %sExists: %s", color, name, M, full_path, color, exists
                 )
@@ -953,7 +949,6 @@ class AbletonSet(object):
     def _process_drum_split(self, track: AbletonTrack):
         logger.debug("///----- on track "+track.id+" "+track.name)
         drum_groups = track.track_root.findall("DeviceChain//DrumGroupDevice")
-        logger.debug(str(len(drum_groups))+" drum groups")
         if len(drum_groups) == 0:
             #delete track without any drum groups (expected to arrive here in recursion)
             logger.debug("delete track without groups")
@@ -996,7 +991,7 @@ class AbletonSet(object):
                 for group in drum_groups[1::]:
                     find_parent(track.track_root, group).remove(group)
 
-                logger.debug("::cleaning up instrument rack chains")
+                logger.debug("cleaning up instrument rack chains")
                 instr_group = find_parent(track.track_root, drum_group, "InstrumentGroupDevice")
                 if instr_group is not None:
                     logger.debug(f"instrument rack found {instr_group.tag} {instr_group.get('Id')}")
@@ -1009,7 +1004,7 @@ class AbletonSet(object):
                         # TODO there could be devices like EQ left which make no sense if the drums are gone
                         # and we can be pretty sure that there was no other midi-to-audio device here, right?
                         if len(devices) == 0: #devices is empty
-                            logger.debug(f"__________ removing empty instrument branch {instr_branch.get('Id')}")
+                            logger.debug(f"removing empty instrument branch {instr_branch.get('Id')}")
                             instr_branch_container.remove(instr_branch)
                         else:
                             logger.debug(f"instrument chain {instr_branch.get('Id')} kept due to {len(devices)} devices:")
@@ -1072,7 +1067,7 @@ class AbletonSet(object):
                                 # TODO there could be devices like EQ left which make no sense if the drums are gone
                                 # and we can be pretty sure that there was no other midi-to-audio device here, right?
                                 if len(devices) == 0: #devices is empty
-                                    logger.debug(f"__________ removing empty instrument branch {instr_branch.get('Id')}")
+                                    logger.debug(f"removing empty instrument branch {instr_branch.get('Id')}")
                                     instr_branch_container.remove(instr_branch)
                                 else:
                                     logger.debug(f"instrument chain {instr_branch.get('Id')} kept due to {len(devices)} devices:")
@@ -1112,13 +1107,6 @@ class AbletonSet(object):
                 key_track = find_parent(clip, key, "KeyTrack")
                 find_parent(clip, key_track).remove(key_track)
         #TODO need to fix Ids of KeyTrack elements?
-
-    def test(self):
-        #pointee_element = self.root.find("LiveSet/NextPointeeId")
-        #pointee_element.set("Value", "1")
-        #self._fixPointees(self.tracks[0])
-        #self._duplicate_track(self.tracks[0])
-        print("TEST")
 
     def _fixPointees(self, track: AbletonTrack):
         pointee_element = self.root.find("LiveSet/NextPointeeId")
@@ -1193,6 +1181,7 @@ class AbletonSet(object):
 
     def number_tracks(self):
         """Ensure all tracks will show a sequence number in their name. Will set the UserName to start with '#-'. Tracks that start with '_' are ignored."""
+        logger.info("%s Numbering tracks", C)
         for track in self.tracks:
             if track.type == "ReturnTrack":
                 continue
@@ -1203,7 +1192,6 @@ class AbletonSet(object):
                 if not base_name:
                     base_name = track.track_root.find("Name/EffectiveName").get("Value")
                 new_base_name = re.sub("^[0-9]+-? *", "", base_name)
-                print(base_name+" ->" + new_base_name)
                 base_name = new_base_name
                 new_name =f"#-{base_name}"
                 user_name_element.set("Value", new_name)
@@ -1221,10 +1209,12 @@ class AbletonSet(object):
         logger.info("%sSorting tracks by arrangement clip start time", C)
         track_starts = {}
         tracks_by_id = {}
+        group_tracks = []
         for track in self.tracks:
             if track.type == "ReturnTrack":
                continue
             if track.type == "GroupTrack":
+                group_tracks.append(track.id)
                 tracks_by_id[track.id] = track
                 continue
             tracks_by_id[track.id] = track
@@ -1242,39 +1232,48 @@ class AbletonSet(object):
                 track_starts[track.group_id] = group_start
 
         # order from last to first ocurrence so we can work backwards and always push tracks to the front with insert(0, track)
-        order = reversed(sorted(track_starts.items(), key=lambda x : float('inf') if x[1] == -1 else x[1]))
+        # inner sort will bring group tracks to the front so that the group's tracks will be after the group track when sorted by start time
+        order = reversed(sorted(sorted(track_starts.items(), key=lambda x : float('inf') if x[1] == -1 else x[1]), key=lambda x : 0 if x[0] in group_tracks else 1))
+
+        print(track_starts)
 
         # apply order by time to all tracks
         for (track_id, _) in order:
+            print(track_id, track_starts[track_id])
             track = tracks_by_id[track_id]
             self.tracks.remove(track)
             self.tracks.insert(0, track)
 
+        self.print_tracks()
+
+        print()    
         # pull tracks into their groups again
         new_order = []
-        groups={}
+        groups = {}
         for track in self.tracks:
-            x = None
+            trackInfo = None
             if track.type == "GroupTrack":
-                x = {"type": "group", "track": track, "children":[]}
-                groups[track.id]=x
+                trackInfo = {"type": "group", "track": track, "children":[]}
+                groups[track.id] = trackInfo
                 if track.group_id != "-1":
-                    groups[track.group_id]["children"].append(x)
+                    groups[track.group_id]["children"].append(trackInfo)
                 else:
-                    new_order.append(x)
+                    new_order.append(trackInfo)
             else:
-                x = {"type": "track", "track": track}
+                trackInfo = {"type": "track", "track": track}
+                if not track.group_id in groups:
+                    print("group "+track.group_id+" not available yet")
                 if track.group_id != "-1":
-                    groups[track.group_id]["children"].append(x)
+                    groups[track.group_id]["children"].append(trackInfo)
                 else:
-                    new_order.append(x)
+                    new_order.append(trackInfo)
 
-        new_list = []
-        for z in new_order:
-            self._append_recursive(new_list, z)
+        sorted_track_list = []
+        for trackInfo in new_order:
+            self._append_recursive(sorted_track_list, trackInfo)
 
         track_container = self.root.find("LiveSet/Tracks")
-        self.tracks = new_list
+        self.tracks = sorted_track_list
 
         #finally apply the order to XML elements
         for t in reversed(self.tracks):
@@ -1282,11 +1281,11 @@ class AbletonSet(object):
             track_container.insert(0, t.track_root)
         
         
-    def _append_recursive(self, tolist: list[AbletonTrack], t: dict):
-        tolist.append(t["track"])
-        if t["type"] == "group":
-            for c in t["children"]:
-                self._append_recursive(tolist, c)
+    def _append_recursive(self, sorted_track_list: list[AbletonTrack], trackInfo: dict):
+        sorted_track_list.append(trackInfo["track"])
+        if trackInfo["type"] == "group":
+            for child in trackInfo["children"]:
+                self._append_recursive(sorted_track_list, child)
 
  
 

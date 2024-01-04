@@ -152,7 +152,7 @@ def find_parent(root: ET.Element, element: ET.Element, type: str = None):
                 return candidate
         return None
 
-def _build_lookup(self, root: ET.Element, element: ET.Element):
+def _build_lookup(root: ET.Element, element: ET.Element):
         index = dict()
         for p in root.iter():
             for c in p:

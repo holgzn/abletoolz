@@ -238,12 +238,6 @@ def parse_arguments() -> argparse.Namespace:
         default=False,
         help="Show the info text of the master track",
     )
-    parser.add_argument(
-        "--test",
-        action="store_true",
-        default=False,
-        help="TEST",
-    )
 
     parser.add_argument(
         "--sort-by-arrangement",
@@ -253,7 +247,6 @@ def parse_arguments() -> argparse.Namespace:
     )
 
     args = parser.parse_args()
-    print(args)
     assert not (
         args.fix_samples_absolute and args.fix_samples_collect
     ), "Can only use --fix-samples-collect or --fix-samples-absolute, not both!"
@@ -347,10 +340,6 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
 
     if args.show_master_notes:
         ableton_set.show_master_notes()
-
-    if args.test:
-        ableton_set.load_tracks()
-        ableton_set.test();
 
     if args.sort_by_arrangement:
         ableton_set.load_tracks()
