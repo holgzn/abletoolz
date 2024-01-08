@@ -3,7 +3,7 @@ import logging
 from typing import Iterator, Tuple
 from xml.etree import ElementTree as ET
 
-from abletoolz.misc import B, C, G, M, get_element
+from abletoolz.misc import B, C, G, M, get_element, to_db
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,10 @@ class AbletonTrack(object):
         self.name = get_element(track_root, "Name.UserName", attribute="Value")
         if not self.name:
             self.name = get_element(track_root, "Name.EffectiveName", attribute="Value")
-        self.id = track_root.get("Id")
+        if self.type != "MasterTrack":
+            self.id = track_root.get("Id")
+        else:
+            self.id = "-1"
         self.group_id = get_element(track_root, "TrackGroupId", attribute="Value")
         # Guessing 'Sesstion' was a typo early on and got stuck to not break backwards compatibility
         self.width = get_element(
@@ -35,6 +38,17 @@ class AbletonTrack(object):
         # Ableton 11 changes.
         self.color_element = "Color" if version > (11, 0, 0) else "ColorIndex"
         self.unfolded = get_element(track_root, "TrackUnfolded", attribute="Value", silent_error=True)  # Ableton 10
+        self.volume = str(to_db(float(get_element(track_root, "DeviceChain.Mixer.Volume.Manual", attribute="Value"))))
+        volume_automation_id = get_element(track_root, "DeviceChain.Mixer.Volume.AutomationTarget", attribute="Id")
+        automation_events = track_root.findall(".//AutomationEnvelopes//PointeeId[@Value='" + volume_automation_id + "']../../..//FloatEvent")
+        if len(automation_events) > 0:
+            min_vol = float('inf')
+            max_vol = float('-inf')
+            for ev in automation_events:
+                min_vol = min(min_vol, float(ev.get("Value")))
+                max_vol = max(max_vol, float(ev.get("Value")))
+            self.volume = str(to_db(min_vol)) + " to " + str(to_db(max_vol))
+
         if not self.unfolded:
             folded = get_element(track_root, "DeviceChain.Mixer.IsFolded", attribute="Value")  # Ableton 9/8
             self.unfolded = "false" if folded == "true" else "true"
@@ -44,7 +58,7 @@ class AbletonTrack(object):
         return (
             f"{B}Track type {self.type:>12}, {G}Name {self.name:>50}, {C}Id {self.id:>4}, "
             f"Group id {self.group_id:>4}, {M}Color {self.color:>3}, Width {self.width:>3}, "
-            f"Height {self.height:>3}, Unfolded: {self.unfolded}"
+            f"Height {self.height:>3}, Unfolded: {self.unfolded:<5}, Volume: {self.volume}"
         )
 
     @property

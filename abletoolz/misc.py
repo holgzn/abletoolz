@@ -1,5 +1,6 @@
 """Define root level vars and functions."""
 
+import math
 import pathlib
 import sys
 from typing import Dict, Literal, Optional, Tuple, Union, overload
@@ -160,3 +161,7 @@ def _build_lookup(root: ET.Element, element: ET.Element):
                 if c == element:
                     return index
         raise ElementNotFound(f"Looks like the element {element} is not in the tree of root {root}")
+
+
+def to_db(x: float):
+        return round(20 * math.log10(x), 2)

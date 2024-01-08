@@ -325,6 +325,7 @@ class AbletonSet(object):
             tracks = get_element(self.root, "LiveSet.Tracks")
             for track in tracks:
                 self.tracks.append(AbletonTrack(track, self.version_tuple))
+            self.tracks.append(AbletonTrack(get_element(self.root, "LiveSet.MasterTrack"), self.version_tuple))
 
     def print_tracks(self) -> None:
         """logger.infos track info."""
