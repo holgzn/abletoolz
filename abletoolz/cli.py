@@ -216,6 +216,16 @@ def parse_arguments() -> argparse.Namespace:
         default=False,
         help="Load and list all track information.",
     )
+
+
+    parser.add_argument(
+        "--list-tracks-export",
+        action="store_true",
+        default=False,
+        help="Shows all tracks in a simplified structure suitable to save with exported single tracks.",
+    )
+    
+
     parser.add_argument(
         "--check-samples",
         action="store_true",
@@ -352,9 +362,10 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         ableton_set.load_tracks()
         ableton_set.number_tracks()
 
-    if args.list_tracks:
+    if args.list_tracks or args.list_tracks_export:
         ableton_set.load_tracks()
-        ableton_set.print_tracks()
+        isExportMode = False or args.list_tracks_export
+        ableton_set.print_tracks(isExportMode)
 
     if args.xml:
         ableton_set.save_xml()

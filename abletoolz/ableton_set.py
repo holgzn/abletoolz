@@ -327,9 +327,28 @@ class AbletonSet(object):
                 self.tracks.append(AbletonTrack(track, self.version_tuple))
             self.tracks.append(AbletonTrack(get_element(self.root, "LiveSet.MasterTrack"), self.version_tuple))
 
-    def print_tracks(self) -> None:
+    def print_tracks(self, isExportMode=False) -> None:
         """logger.infos track info."""
-        logger.info("Tracks:\n%s", "\n".join([str(x) for x in self.tracks]))
+        if not isExportMode:
+            logger.info("Tracks:\n%s", "\n".join([str(x) for x in self.tracks]))
+        else:
+            num = 0
+            group_stack = []
+            indent = ""
+            for track in self.tracks:
+                num = num + 1
+                display_name = track.name
+                if display_name.startswith("# "):
+                    display_name = display_name.replace("# ",str(num)+" ")
+                if len(group_stack) > 0 and (track.group_id != group_stack[-1] or track.group_id == "-1"):
+                    group_stack.pop()
+                    indent = indent[0:-2]
+                elif track.group_id != "-1" and (len(group_stack) == 0  or  track.group_id != group_stack[-1]):
+                    group_stack.append(track.group_id)
+                    indent = indent+"  "
+                print(indent + display_name)
+
+
 
     @set_loaded
     def find_furthest_bar(self) -> int:
