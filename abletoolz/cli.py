@@ -154,9 +154,9 @@ def parse_arguments() -> argparse.Namespace:
         help="set Cue audio output tracks. Set to 1 for stereo 1/2, 2 for 3/4 etc",
     )
     parser.add_argument(
-        "--master-out",
+        "--main-out",
         type=int,
-        help="number to set Master audio output tracks to. Same numbers as --cue-out",
+        help="number to set Main audio output tracks to. Same numbers as --cue-out",
     )
     parser.add_argument(
         "--fix-samples-absolute",
@@ -243,10 +243,10 @@ def parse_arguments() -> argparse.Namespace:
         "sets but abbreviated component names. Might possibly add support for them later.",
     )
     parser.add_argument(
-        "--show-master-notes",
+        "--show-main-notes",
         action="store_true",
         default=False,
-        help="Show the info text of the master track",
+        help="Show the info text of the main track",
     )
 
     parser.add_argument(
@@ -274,8 +274,8 @@ def parse_arguments() -> argparse.Namespace:
                 args.fold,
                 args.gradient_tracks,
                 args.list_tracks,
-                args.show_master_notes,
-                args.master_out,
+                args.show_main_notes,
+                args.main_out,
                 args.prepend_version,
                 args.save,
                 args.append_name,
@@ -310,8 +310,12 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
     # if args.save:
     #     backup = copy.deepcopy(ableton_set)
 
-    if args.master_out:
-        ableton_set.set_audio_output(args.master_out, element_string="MasterTrack")
+    mainId = "Main"
+    if ableton_set.version_tuple[0] < 12:
+        mainId = "Master"
+
+    if args.main_out:
+        ableton_set.set_audio_output(args.main_out, element_string=f"{mainId}Track")
     if args.cue_out:
         ableton_set.set_audio_output(args.cue_out, element_string="PreHearTrack")
     
@@ -348,8 +352,8 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         result = ableton_set.list_plugins(vst_dirs)
         vst_dirs = list(set(result))
 
-    if args.show_master_notes:
-        ableton_set.show_master_notes()
+    if args.show_main_notes:
+        ableton_set.show_main_notes()
 
     if args.sort_by_arrangement:
         ableton_set.load_tracks()
@@ -385,7 +389,7 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
             args.fix_samples_collect,
             args.fold,
             args.gradient_tracks,
-            args.master_out,
+            args.main_out,
             args.prepend_version,
             args.set_track_heights,
             args.set_track_widths,

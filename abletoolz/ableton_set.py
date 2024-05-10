@@ -128,6 +128,8 @@ class AbletonSet(object):
         self.tracks: List[AbletonTrack] = []
         self.sample_list: List[utils.SampleRef] = []
 
+        self.mainId = "Main"
+
         # TODO WIP, not finished/used necessarily.
         self.set_os: SetOperatingSystem = SetOperatingSystem.UNSET
         self.missing_absolute_samples: List[pathlib.Path] = []
@@ -177,6 +179,8 @@ class AbletonSet(object):
             raise SetError(f"Could not parse version from: {self.version}")
         self.version_tuple = major, minor, patch
         logger.info("%sSet version: %s%s", B, M, self.version)
+        if major < 12:
+            self.mainId = "Master"
         if "b" in self.version.split()[-1]:
             logger.warning("%sSet is from a beta version, some commands might not work properly!", Y)
 
@@ -325,7 +329,7 @@ class AbletonSet(object):
             tracks = get_element(self.root, "LiveSet.Tracks")
             for track in tracks:
                 self.tracks.append(AbletonTrack(track, self.version_tuple))
-            self.tracks.append(AbletonTrack(get_element(self.root, "LiveSet.MasterTrack"), self.version_tuple))
+            self.tracks.append(AbletonTrack(get_element(self.root, f"LiveSet.{self.mainId}Track"), self.version_tuple))
 
     def print_tracks(self, isExportMode=False) -> None:
         """logger.infos track info."""
@@ -363,7 +367,7 @@ class AbletonSet(object):
         """Get bpm from Ableton Live set XML."""
         if self.version_tuple is None:
             raise SetError("Set version is not parsed!")
-        post_10_bpm = "LiveSet.MasterTrack.DeviceChain.Mixer.Tempo.Manual"
+        post_10_bpm = f"LiveSet.{self.mainId}Track.DeviceChain.Mixer.Tempo.Manual"
         pre_10_bpm = "LiveSet.MasterTrack.MasterChain.Mixer.Tempo.ArrangerAutomation.Events.FloatEvent"
         pre_10_bpm = "LiveSet.MasterTrack.DeviceChain.Mixer.Tempo.ArrangerAutomation.Events.FloatEvent"
         major, minor, _ = self.version_tuple
@@ -439,11 +443,11 @@ class AbletonSet(object):
         if not isinstance(out_target_element, ET.Element):
             out_target_element = get_element(  # ableton 8 sets use "MasterChain" for master track.
                 self.root,
-                f"LiveSet.{element_string}.MasterChain.AudioOutputRouting.Target",
+                f"LiveSet.{element_string}.{self.mainId}Chain.AudioOutputRouting.Target",
             )
             lower_display_string_element = get_element(
                 self.root,
-                f"LiveSet.{element_string}.MasterChain.AudioOutputRouting.LowerDisplayString",
+                f"LiveSet.{element_string}.{self.mainId}Chain.AudioOutputRouting.LowerDisplayString",
             )
         else:
             lower_display_string_element = get_element(
@@ -1217,12 +1221,12 @@ class AbletonSet(object):
                 user_name_element.set("Value", new_name)
                 track.name =  new_name
 
-    def show_master_notes(self):
-        info_text = self.root.find("LiveSet/MasterTrack/Name/Annotation").get("Value")
+    def show_main_notes(self):
+        info_text = self.root.find(f"LiveSet/{self.mainId}Track/Name/Annotation").get("Value")
         if info_text:
-            logger.info("%sMaster track info text: %s%s",C, G, info_text)
+            logger.info("%s%s track info text: %s%s",C, self.mainId, G, info_text)
         else:
-            logger.info("%sMaster track has no info text.",Y)
+            logger.info("%s%s track has no info text.",Y, self.mainId)
     
     def sort_by_arrangement(self):
         """Sort tracks by their earliest arrangement clip start time"""

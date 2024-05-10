@@ -116,9 +116,9 @@ setup the Min is 17, Default 68, Max 425 for track height.
 
 `--set-track-widths` Set clip view track widths for all tracks. On my setup, Min 17, Default 24, Max 264.
 
-`--master-out` number to set Master audio output channels to. 1 correlates to stereo out 1/2, 2 to stereo out 3/4 etc.
+`--main-out` number to set Main/Master (pre Live 12) audio output channels to. 1 correlates to stereo out 1/2, 2 to stereo out 3/4 etc.
 
-`--cue-out` set Cue audio output channels. Same numbering for stereo outputs as master out.
+`--cue-out` set Cue audio output channels. Same numbering for stereo outputs as main out.
 
 
 ### Output - saving edited sets to disk
@@ -171,14 +171,14 @@ abletoolz "D:\all_sets\some_set.als" --list-tracks
 ```
 ![List tracks](https://github.com/elixirbeats/abletoolz/raw/master/doc/list_tracks.png)
 
-Set all master outs to stereo 1/2 and cue outs to 3/4
+Set all main outs to stereo 1/2 and cue outs to 3/4
 ```
-abletoolz "D:\all_sets" -s --master-out 1 --cue-out 2
+abletoolz "D:\all_sets" -s --main-out 1 --cue-out 2
 ```
 
 Or a bunch of options
 ```
-abletoolz "D:\all_sets\myset.als" -s -x --master-out 1 --cue-out 1  --unfold \
+abletoolz "D:\all_sets\myset.als" -s -x --main-out 1 --cue-out 1  --unfold \
 --set-track-heights 68 --set-track-widths 24
 ```
 ![Check plugins](https://github.com/elixirbeats/abletoolz/raw/master/doc/everything.png)

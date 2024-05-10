@@ -13,12 +13,15 @@ class AbletonTrack(object):
 
     def __init__(self, track_root: ET.Element, version: Tuple[int, int, int]) -> None:
         """Construct AbletonTrack."""
+        mainId = "Main"
+        if version[0] < 12:
+            mainId = "Master"
         self.track_root = track_root
         self.type = track_root.tag
         self.name = get_element(track_root, "Name.UserName", attribute="Value")
         if not self.name:
             self.name = get_element(track_root, "Name.EffectiveName", attribute="Value")
-        if self.type != "MasterTrack":
+        if self.type != f"{mainId}Track":
             self.id = track_root.get("Id")
         else:
             self.id = "-1"
