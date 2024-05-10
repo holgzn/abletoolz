@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import sqlite3
 from typing import Callable, Dict, Generator, List, Optional, ParamSpec, Tuple, TypeVar
 from xml.etree import ElementTree as ET
 
@@ -482,8 +483,23 @@ class AbletonSet(object):
         else:
             raise ValueError(f"Couldn't parse OS path type! {path_str}")
 
-    def search_plugins(self, plugin_name: str) -> Optional[pathlib.Path]:
+    def search_plugins(self, plugin_name: str, cursor: sqlite3.Cursor) -> Optional[pathlib.Path]:
         """Search for plugins and add them to self.found_vst_dirs."""
+
+
+        # TODO execute the proper query according to VST2 vs VST3 (arch=2 vs arch=3)
+        res = cursor.execute(f"select pm.path from plugins p LEFT JOIN plugin_modules pm on p.module_id=pm.module_id WHERE p.name='{plugin_name}' LIMIT 1")
+        
+        plugin = res.fetchone()
+        if plugin is not None:
+            path = plugin[0]
+            return pathlib.Path(path)
+        
+        return None
+    
+        # TODO could fall back to scannig the file system for candidates that Live didn't pick up, but they would be unknown anyways
+
+
         if sys.platform == "win32":
             drive = os.environ["SYSTEMDRIVE"]
             _WINDOWS_VST3 = pathlib.Path(rf"{drive}\Program Files\Common Files\VST3")
@@ -500,9 +516,10 @@ class AbletonSet(object):
             return None
         else:
 
-            # TODO match from sqlite db? (~/Library/Application\ Support/Ableton/Live\ Database )
+            # TODO match from sqlite db? (~/Library/Application\ Support/Ableton/Live\ Database ) #select pm.path from plugins p LEFT JOIN plugin_modules pm on p.module_id=pm.module_id WHERE p.name='<PLUGIN_NAME>' LIMIT 1
             # TODO: custom folder plugin folder
-            vst3_plugins = list(pathlib.Path("/Library/Audio/Plug-Ins/VST3").rglob("*.vst3/Contents/Info.plist")) + list(pathlib.Home() + pathlib.Path("/Library/Audio/Plug-Ins/VST3").rglob("*.vst3/Contents/Info.plist"))
+            vst3_plugins = list(pathlib.Path("/Library/Audio/Plug-Ins/VST3").rglob("*.vst3/Contents/Info.plist")) + list(pathlib.Path(str(pathlib.Path.home()) + "/Library/Audio/Plug-Ins/VST3").rglob("*.vst3/Contents/Info.plist"))
+            
             for vst3 in vst3_plugins:
                 with open(vst3, 'rb') as file:
                     pl = plistlib.load(file)
@@ -524,7 +541,7 @@ class AbletonSet(object):
 
     # Plugin related functions.
     def parse_vst_element(
-        self, vst_element: ET.Element
+        self, vst_element: ET.Element, cursor: sqlite3.Cursor
     ) -> Tuple[Optional[pathlib.Path], Optional[str], Optional[pathlib.Path]]:
         """Parse out VST element from vst xtree."""
         for plugin_path in ["Dir", "Path"]:
@@ -535,7 +552,8 @@ class AbletonSet(object):
                         logger.error("Couldn't get Path for %s", path_results[0])
                         continue
                     if not "/" in full_path and not "\\" in full_path:
-                        if search_result := self.search_plugins(full_path):
+                        # TODO can it really happen that the Path contains a plugin name only??
+                        if search_result := self.search_plugins(full_path, cursor):
                             return None, search_result.name, search_result
                         return None, full_path, None
                     path_separator = self.path_separator_type(full_path)
@@ -566,17 +584,39 @@ class AbletonSet(object):
     def list_plugins(self, vst_dirs: List[pathlib.Path]) -> List[pathlib.Path]:
         """Iterates through all plugin references and checks paths for VSTs."""
         self.found_vst_dirs.extend(vst_dirs)
-        # TODO consider to log existing plugins as debug and only report missing ones by default as it is with the samples
+        db_path = ""
+        if sys.platform == "win32":
+            #https://help.ableton.com/hc/en-us/articles/360000794970-Resetting-Live-s-Database
+            db_path = "\AppData\Local\Ableton\Live Database"
+        else:
+            db_path = "/Library/Application Support/Ableton/Live Database"
+        
+        # not sure how to determine the name of the file, it will probably depend on the installed version of Live
+        # additionally, if multiple versions are installed, there might be multiple files
+        db_files = list(pathlib.Path(str(pathlib.Path.home()) + db_path).rglob("*.db"))
+        db_files.sort(key=lambda x: os.path.getmtime(x))
+        # we just pick the most recently modified one 
+        db_file = db_files[-1]
+        
+        logger.info("%sUsing Live Database from %s",C, db_file)
+
+        connection = sqlite3.connect(db_file)
+        cursor = connection.cursor()
+
+        # TODO aggregate plugin + count
+        
         for plugin_element in self.root.iter("PluginDesc"):
+            # TODO just go by Name / PlugName for all types of plugins and use the DB
             self.last_elem = plugin_element
             for vst_element in plugin_element.iter("VstPluginInfo"):
-                full_path, name, potential = self.parse_vst_element(vst_element)
+                full_path, name, potential = self.parse_vst_element(vst_element, cursor)
                 exists = True if full_path and full_path.exists() else False
                 if exists and full_path.parent not in self.found_vst_dirs:
                     self.found_vst_dirs.append(full_path.parent)
                 elif not exists:
                     # Did not find plugin in saved path, try to search
-                    potential = self.search_plugins(name)
+                    logger.debug("Plugin %s not found in stored path. Will search by name", name)
+                    potential = self.search_plugins(name, cursor)
                 color = G if exists else R
                 if potential and color == R:
                     color = Y
@@ -598,7 +638,7 @@ class AbletonSet(object):
                 # au_components = pathlib.Path('/Library/Audio/Plug-Ins/Components').rglob('*.component')
             for vst3_element in plugin_element.iter("Vst3PluginInfo"):
                 name = vst3_element.find("Name").get("Value")
-                full_path = self.search_plugins(name)
+                full_path = self.search_plugins(name, cursor)
                 #manufacturer = "TODO: read from sqlite?" # get_element(plugin_element, "AuPluginInfo.Manufacturer", attribute="Value")
                 exists = True if full_path and full_path.exists() else False
                 color = G if exists else R
@@ -606,6 +646,7 @@ class AbletonSet(object):
                     "%sPlugin: %s, %sPlugin folder path: %s, %sExists: %s", color, name, M, full_path, color, exists
                 )
 
+        connection.close()
         return self.found_vst_dirs
 
     def _list_samples(self) -> None:
