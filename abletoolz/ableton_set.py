@@ -19,6 +19,9 @@ from abletoolz import color_tools, utils
 from abletoolz.ableton_track import AbletonTrack
 from abletoolz.misc import CB, RB, RST, STEREO_OUTPUTS, B, C, G, M, R, Y, get_element, ElementNotFound, find_parent
 
+from datetime import datetime
+
+
 if sys.platform == "win32":
     import win32_setctime
 
@@ -604,7 +607,7 @@ class AbletonSet(object):
         cursor = connection.cursor()
 
         # TODO aggregate plugin + count
-        
+        #TODO plugin list mode that lists plugins by track
         for plugin_element in self.root.iter("PluginDesc"):
             # TODO just go by Name / PlugName for all types of plugins and use the DB
             self.last_elem = plugin_element
@@ -653,6 +656,7 @@ class AbletonSet(object):
         """Post Ableton 11 sample parser. Format changed from binary encoded paths to simple strings for all OSes."""
         missing_samples = 0
         for parsed in self._iterate_samples():
+            #print(parsed.absolute)
             if parsed.absolute_exists or parsed.relative_exists:
                 # Sample will load in ableton, no need to do anything.
                 logger.debug(
@@ -1353,6 +1357,66 @@ class AbletonSet(object):
                 self._append_recursive(sorted_track_list, child)
 
  
+    def show_project_time(self, full_log=False):
+        #print("checking time")
+        plugin_state = self.root.find(".//PluginDesc/Vst3PluginInfo/Name[@Value='4U+ ProjectTime']/../Preset/Vst3Preset/ProcessorState")
+        if plugin_state is None:
+            logger.error("VST3 '4U+ ProjectTime not' found", R)
+            return
+        
+        #print(plugin_state.text)
+        #hex_data =re.sub('[\s+]', '',plugin_state.text)[32:] # clear whiitespace and omit header segment
+        #print()
+        #print(hex_data)
+        #print()
+        
+        xml_data =  re.sub(r'</HOFAFourUplusProjectTime>.*$', '</HOFAFourUplusProjectTime>',re.sub(r'^.*?<\?xml', '<?xml', bytearray.fromhex(plugin_state.text).decode("latin1")))  # decode hex to ascii and remove non-xml data
+        #print(xml_data)
+        plugin_data = ET.fromstring(xml_data)
+        project_time = plugin_data.find(".//LOGS").get("projectTime")
+        #print(project_time)
 
+        
+        seconds = int(project_time) / 1000
+        (hours, seconds) = divmod(seconds, 3600)
+        (minutes, seconds) = divmod(seconds, 60)
+
+        formatted=  f"{hours:02.0f}:{minutes:02.0f}"#:{seconds:02.0f}"
+        logger.info("Work Time: %s%s", G, formatted)
+
+        if full_log:
+            logger.info("FULL")
+            entries = plugin_data.findall(".//LOG_Group_Entry")
+            for entry in entries:
+                start = int(entry.get("start_time"))
+                stop = int(entry.get("stop_time"))
+                duration = stop - start
+                comment = entry.get("comment")
+                logger.info("%s%s %s %s %s", G, self.convert_timestamp(start), self.convert_timestamp(stop), self.format_duration(duration / 1000), comment)
+
+    # def import_work_log(self, from_file):
+    #     plugin_state = self.root.find(".//PluginDesc/Vst3PluginInfo/Name[@Value='4U+ ProjectTime']/../Preset/Vst3Preset/ProcessorState")
+    #     if plugin_state is None:
+    #         logger.error("VST3 '4U+ ProjectTime not' found", R)
+    #         return
+
+    def convert_timestamp(self, ts):
+        return datetime.fromtimestamp(int(ts) / 1000).strftime('%Y-%m-%d %H:%M:%S')
+
+    def format_duration(self, seconds):
+        (hours, seconds) = divmod(seconds, 3600)
+        (minutes, seconds) = divmod(seconds, 60)
+        formatted=  f"{hours:02.0f}:{minutes:02.0f}"#:{seconds:02.0f}"
+        return formatted
+
+        
+
+
+
+# The first segment 56737457000000080000000100000000 can be broken down as:
+# 56737457: "VstW" (Header)
+# 00000008: Chunk size (8 bytes)
+# 00000001: Version or other metadata
+# 00000000: Reserved or additional metadata
 
 

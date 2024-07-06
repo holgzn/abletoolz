@@ -256,6 +256,28 @@ def parse_arguments() -> argparse.Namespace:
         help="Sort tracks by earliest clips in arrangement",
     )
 
+    parser.add_argument(
+        "--show-track-dependencies",
+        action="store_true",
+        default=False,
+        help="TODO: list tracks that are inputs for others (esp. side-chain)",
+    )
+
+    parser.add_argument(
+        "--show-project-time",
+        action="store_true",
+        default=False,
+        help="Extract time from 4U+ ProjectTime Plugin",
+    )
+
+    parser.add_argument(
+        "--show-work-log",
+        action="store_true",
+        default=False,
+        help="Extract time from 4U+ ProjectTime Plugin",
+    )
+
+
     args = parser.parse_args()
     assert not (
         args.fix_samples_absolute and args.fix_samples_collect
@@ -290,6 +312,7 @@ def parse_arguments() -> argparse.Namespace:
                 args.sort_by_arrangement,
                 args.sort_by_arrangement_inside_groups,
                 args.sort_by_arrangement_groups_only,
+                #TODO add missing
             ]
         )
     ), "--db/--database cannot be used with other commands!"
@@ -370,6 +393,14 @@ def process_set(args: argparse.Namespace, pathlib_obj: pathlib.Path, db: Optiona
         ableton_set.load_tracks()
         isExportMode = False or args.list_tracks_export
         ableton_set.print_tracks(isExportMode)
+
+    if args.show_project_time:
+        ableton_set.load_tracks()
+        ableton_set.show_project_time()
+    
+    if args.show_work_log:
+        ableton_set.load_tracks()
+        ableton_set.show_project_time(True)
 
     if args.xml:
         ableton_set.save_xml()
