@@ -27,9 +27,12 @@ class AbletonTrack(object):
             self.id = "-1"
         self.group_id = get_element(track_root, "TrackGroupId", attribute="Value")
         # Guessing 'Sesstion' was a typo early on and got stuck to not break backwards compatibility
+        width_address = "DeviceChain.Mixer.ViewStateSesstionTrackWidth"
+        if version[0] == 12 and version [1] >= 1 or version[0] > 12:
+            width_address = "DeviceChain.Mixer.ViewStateSessionTrackWidth"
         self.width = get_element(
             track_root,
-            "DeviceChain.Mixer.ViewStateSesstionTrackWidth",
+            width_address,
             attribute="Value",
         )
         # Lane height in arrangement view will be automation lane 0
