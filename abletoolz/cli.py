@@ -463,7 +463,7 @@ def process(args: argparse.Namespace) -> int:
             process_set(args, pathlib_obj, db)
         except ElementNotFound:
             logger.info(traceback.format_exc())
-        logger.info("%s\n\n%s\n\n", M, "^" * os.get_terminal_size().columns)
+        logger.info("%s\n\n%s\n\n", M, "^" * 20)
     logger.info(
         "%sTook %s to process %s set(s)", CB, datetime.timedelta(seconds=time.time() - start_time), len(pathlib_objects)
     )

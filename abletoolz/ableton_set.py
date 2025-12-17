@@ -341,21 +341,20 @@ class AbletonSet(object):
             logger.info("Tracks:\n%s", "\n".join([str(x) for x in self.tracks]))
         else:
             num = 0
-            group_stack = []
+            depth = {}
             indent = ""
             for track in self.tracks:
-                num = num + 1
                 display_name = track.name
-                if display_name.startswith("# "):
-                    display_name = display_name.replace("# ",str(num)+" ")
-                if len(group_stack) > 0 and (track.group_id != group_stack[-1] or track.group_id == "-1"):
-                    group_stack.pop()
-                    indent = indent[0:-2]
-                elif track.group_id != "-1" and (len(group_stack) == 0  or  track.group_id != group_stack[-1]):
-                    group_stack.append(track.group_id)
-                    indent = indent+"  "
+                if not display_name.startswith("_"):
+                    num = num + 1
+                indent = ""
+                if track.group_id != "-1":
+                    indent = depth.get(track.group_id)
+                depth[track.id] = indent +  "  "
+                if display_name.startswith("#"):
+                    #and not track.type == "MainTrack"
+                    display_name = display_name.replace("#",str(num))
                 print(indent + display_name)
-
 
 
     @set_loaded

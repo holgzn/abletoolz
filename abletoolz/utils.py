@@ -250,7 +250,6 @@ class SampleRef(pydantic.BaseModel):
                 ET.dump(file_ref)
             relative, _ = check_relative_path(name, sample_ref, project_root_folder)
             relative_element = file_ref.find("RelativePath")
-
         return cls(
             name=name,
             size=file_size,

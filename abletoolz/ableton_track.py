@@ -45,6 +45,7 @@ class AbletonTrack(object):
         self.color_element = "Color" if version > (11, 0, 0) else "ColorIndex"
         self.unfolded = get_element(track_root, "TrackUnfolded", attribute="Value", silent_error=True)  # Ableton 10
         self.volume = str(to_db(float(get_element(track_root, "DeviceChain.Mixer.Volume.Manual", attribute="Value"))))
+        self.on_status = get_element(track_root, "DeviceChain.Mixer.On.Manual", attribute="Value")        
         volume_automation_id = get_element(track_root, "DeviceChain.Mixer.Volume.AutomationTarget", attribute="Id")
         automation_events = track_root.findall(".//AutomationEnvelopes//PointeeId[@Value='" + volume_automation_id + "']../../..//FloatEvent")
         if len(automation_events) > 0:
@@ -64,7 +65,7 @@ class AbletonTrack(object):
         return (
             f"{B}Track type {self.type:>12}, {G}Name {self.name:>50}, {C}Id {self.id:>4}, "
             f"Group id {self.group_id:>4}, {M}Color {self.color:>3}, Width {self.width:>3}, "
-            f"Height {self.height:>3}, Unfolded: {self.unfolded:<5}, Volume: {self.volume}"
+            f"Height {self.height:>3}, Unfolded: {self.unfolded:<5}, Volume: {self.volume}, On: {self.on_status}"
         )
 
     @property
